@@ -41,6 +41,12 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet" />
+        <script dangerouslySetInnerHTML={{ __html: `
+          if (typeof navigator !== 'undefined' && navigator.serviceWorker && !navigator.serviceWorker.addEventListener) {
+            navigator.serviceWorker.addEventListener = function() {};
+            navigator.serviceWorker.removeEventListener = function() {};
+          }
+        `}} />
       </head>
       <body className="font-body antialiased bg-background text-foreground">
         <Providers>
