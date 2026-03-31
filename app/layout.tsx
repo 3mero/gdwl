@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Providers } from '@/components/providers';
 import { Toaster } from "@/components/ui/toaster";
+import { PWARegistrar } from '@/components/PWARegistrar';
 
 export const metadata: Metadata = {
   title: {
@@ -44,8 +45,9 @@ export default function RootLayout({
       <body className="font-body antialiased bg-background text-foreground">
         <Providers>
           {children}
-          <Toaster />
+            <Toaster />
         </Providers>
+        <PWARegistrar /> {/* <-- أضف المكون هنا داخل الـ body */}
       </body>
     </html>
   );
