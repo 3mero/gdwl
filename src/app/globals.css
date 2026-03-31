@@ -1,0 +1,51 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 14% 10%; /* Very dark gray-blue */
+    --foreground: 210 40% 98%;
+    --card: 220 14% 12%; /* Slightly lighter dark gray-blue */
+    --card-foreground: 210 40% 98%;
+    --popover: 220 14% 10%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 200 96% 59%; 
+    --primary-foreground: 222 47% 15%; 
+    --secondary: 217 33% 20%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 20%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 28% 24%; /* Dark accent */
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 28% 18%; /* Darker border */
+    --input: 217 28% 20%; /* Darker input */
+    --ring: 200 96% 59%;
+    --chart-1: 200 96% 59%;
+    --chart-2: 210 40% 96.1%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --radius: 0.5rem;
+    --work-color: hsl(150, 40%, 35%);
+    --holiday-color: hsl(0, 55%, 45%);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+    .ticker-item {
+        transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
+    }
+}
