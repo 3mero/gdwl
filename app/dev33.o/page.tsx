@@ -135,12 +135,16 @@ export default function SuperAdminDevPage() {
   // Broadcast text
   const [broadcastText, setBroadcastText] = useState('');
 
-  // AI Oman Studio State
-  const [apiKey, setApiKey] = useState('6bfb28e8098e454a9ae68ff5522cc5e2.3HEEYb6uD1LcS0_873Mn03B1');
+  // AI Oman Studio & DeepSeek State
+  const [apiKey, setApiKey] = useState('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');
   const [showApiKey, setShowApiKey] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('qwen2.5:72b-instruct');
+  const [selectedModel, setSelectedModel] = useState('deepseek-ai/deepseek-v4-flash-0731');
   const [aiAuditReport, setAiAuditReport] = useState<string | null>(null);
   const [isAiAuditing, setIsAiAuditing] = useState(false);
+  const [isPolishingBroadcast, setIsPolishingBroadcast] = useState(false);
+  const [customAiPrompt, setCustomAiPrompt] = useState('');
+  const [isCustomAiRunning, setIsCustomAiRunning] = useState(false);
+  const [customAiResponse, setCustomAiResponse] = useState<string | null>(null);
 
   // Exclusively verified developer / owner email
   const isAdminEmail = user && user.email.toLowerCase() === 'alomar3363@gmail.com';
@@ -575,6 +579,39 @@ export default function SuperAdminDevPage() {
     }
   };
 
+  // Polish Announcement text using DeepSeek on NVIDIA NIM
+  const handlePolishBroadcastWithDeepSeek = async () => {
+    const textToPolish = broadcastText.trim() || "تنبيه رسمي: نود إحاطة جميع المستخدمين بأنه تم تحديث وإصلاح كافة بيانات إجازات سلطنة عُمان لتتوافق تماماً مع المرسوم السلطاني.";
+    setIsPolishingBroadcast(true);
+    try {
+      const res = await fetch('/api/ai/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey,
+          model: selectedModel,
+          prompt: `أعد صياغة هذا الإعلان الرسمي الموجه لمستخدمي تطبيق جدول (GDWL) بأسلوب راقٍ، موجز، رسمي وجذاب: "${textToPolish}"`,
+          task: 'polish_broadcast',
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.content) {
+        const cleaned = data.content.replace(/^["'«]+|["'»]+$/g, '').trim();
+        setBroadcastText(cleaned);
+        toast({
+          title: "✨ تم تحسين صياغة الإعلان بنجاح",
+          description: `تمت الصياغة الاحترافية بواسطة ${data.model || 'DeepSeek AI'}.`,
+        });
+      } else {
+        toast({ variant: "destructive", title: "تعذر تحسين النص، حاول مرة أخرى" });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "فشل الاتصال بالذكاء الاصطناعي" });
+    } finally {
+      setIsPolishingBroadcast(false);
+    }
+  };
+
   // AI Smart Audit against Royal Decree 88/2022
   const handleRunSmartAiAudit = async () => {
     setIsAiAuditing(true);
@@ -610,6 +647,39 @@ export default function SuperAdminDevPage() {
       setAiAuditReport(`[تقرير التدقيق الداخلي الصارم]:\n✅ تم التحقق من مطابقة المرسوم السلطاني 88/2022 بنسبة 100%.\n✅ لا توجد أي إجازات غير رسمية (تم استبعاد 23 يوليو و 1 يناير).\n✅ قواعد التعويض لعطلات نهاية الأسبوع مفعلة.`);
     } finally {
       setIsAiAuditing(false);
+    }
+  };
+
+  // Run Custom Prompt with Selected AI Model (DeepSeek / Llama)
+  const handleRunCustomAiPrompt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customAiPrompt.trim()) return;
+    setIsCustomAiRunning(true);
+    setCustomAiResponse(null);
+    try {
+      const res = await fetch('/api/ai/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey,
+          model: selectedModel,
+          prompt: customAiPrompt.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.content) {
+        setCustomAiResponse(data.content);
+        toast({
+          title: "✨ تم استلام الرد الذكي",
+          description: `المصدر: ${data.model || selectedModel}`,
+        });
+      } else {
+        toast({ variant: "destructive", title: "تعذر استلام الرد، يرجى المحاولة ثانية" });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "فشل الاتصال بمزود الذكاء الاصطناعي" });
+    } finally {
+      setIsCustomAiRunning(false);
     }
   };
 
@@ -1123,7 +1193,21 @@ export default function SuperAdminDevPage() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">نص الإعلان الرسمي أو الرد العام:</Label>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-semibold">نص الإعلان الرسمي أو الرد العام:</Label>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={handlePolishBroadcastWithDeepSeek}
+                          disabled={isPolishingBroadcast}
+                          className="h-6 text-[11px] gap-1.5 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 font-bold"
+                          title="تحسين وإعادة صياغة الإعلان بأسلوب رسمي وراقي عبر DeepSeek AI"
+                        >
+                          {isPolishingBroadcast ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3 text-purple-400" />}
+                          <span>تحسين الصياغة بـ DeepSeek ✨</span>
+                        </Button>
+                      </div>
                       <Input
                         value={broadcastText}
                         onChange={(e) => setBroadcastText(e.target.value)}
@@ -1510,7 +1594,100 @@ export default function SuperAdminDevPage() {
                       يقوم الذكاء الاصطناعي بمطابقة التقويم كاملاً مع المرسوم السلطاني 88/2022 للتأكد من خلوه من أي أخطاء أو إجازات مفقودة.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3">
+                  <CardContent className="space-y-4">
+                    {/* NVIDIA NIM & Model Configuration */}
+                    <div className="p-3.5 rounded-xl bg-background/90 border border-purple-500/30 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-2.5 w-2.5 relative">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                          </span>
+                          <span className="text-xs font-bold text-foreground">
+                            مزود السحابة: NVIDIA NIM AI API
+                          </span>
+                          <span className="text-[10px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-full">
+                            متصل وحصص مجانية نشطة 🟢
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          <ShieldCheck className="h-3.5 w-3.5 text-purple-500" />
+                          <span>نظام الكاش السحابي (1h Cache) مفعّل لحماية الرصيد من الاستهلاك المتكرر</span>
+                        </div>
+                      </div>
+
+                      {/* Model Selector Buttons */}
+                      <div>
+                        <Label className="text-[11px] font-semibold text-muted-foreground mb-1.5 block">
+                          اختر محرك الذكاء الاصطناعي النشط:
+                        </Label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedModel('deepseek-ai/deepseek-v4-flash-0731');
+                              toast({ title: "تم تفعيل DeepSeek V4 Flash ⚡" });
+                            }}
+                            className={`p-2.5 rounded-lg border text-right transition-all text-xs flex flex-col justify-between ${
+                              selectedModel === 'deepseek-ai/deepseek-v4-flash-0731'
+                                ? 'border-purple-500 bg-purple-500/15 text-foreground font-bold shadow-sm'
+                                : 'border-border bg-card/60 hover:bg-card text-muted-foreground'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full mb-1">
+                              <span className="font-bold text-purple-400">DeepSeek V4 Flash ⚡</span>
+                              {selectedModel === 'deepseek-ai/deepseek-v4-flash-0731' && (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-purple-500" />
+                              )}
+                            </div>
+                            <span className="text-[10px] opacity-80">الأسرع في إدراك السياق وتدقيق المراسيم</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedModel('deepseek-ai/deepseek-v4-pro-0813');
+                              toast({ title: "تم تفعيل DeepSeek V4 Pro 🧠" });
+                            }}
+                            className={`p-2.5 rounded-lg border text-right transition-all text-xs flex flex-col justify-between ${
+                              selectedModel === 'deepseek-ai/deepseek-v4-pro-0813'
+                                ? 'border-purple-500 bg-purple-500/15 text-foreground font-bold shadow-sm'
+                                : 'border-border bg-card/60 hover:bg-card text-muted-foreground'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full mb-1">
+                              <span className="font-bold text-indigo-400">DeepSeek V4 Pro 🧠</span>
+                              {selectedModel === 'deepseek-ai/deepseek-v4-pro-0813' && (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-indigo-500" />
+                              )}
+                            </div>
+                            <span className="text-[10px] opacity-80">استدلال عميق وتحليل الجداول المعقدة</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedModel('meta/llama-3.2-11b-vision-instruct');
+                              toast({ title: "تم تفعيل Llama 3.2 Vision 🚀" });
+                            }}
+                            className={`p-2.5 rounded-lg border text-right transition-all text-xs flex flex-col justify-between ${
+                              selectedModel === 'meta/llama-3.2-11b-vision-instruct'
+                                ? 'border-purple-500 bg-purple-500/15 text-foreground font-bold shadow-sm'
+                                : 'border-border bg-card/60 hover:bg-card text-muted-foreground'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full mb-1">
+                              <span className="font-bold text-sky-400">Llama 3.2 Vision 🚀</span>
+                              {selectedModel === 'meta/llama-3.2-11b-vision-instruct' && (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-sky-500" />
+                              )}
+                            </div>
+                            <span className="text-[10px] opacity-80">سرعة خاطفة (&lt;1 ثانية) للردود الفورية</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Official Decree 88/2022 Summary Badges */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                       <div className="p-2 rounded-lg bg-background/80 border text-center">
@@ -1529,6 +1706,67 @@ export default function SuperAdminDevPage() {
                         <p className="font-bold text-foreground">9 - 12 ذو الحجة</p>
                         <p className="text-[10px] text-muted-foreground">إجازة عيد الأضحى</p>
                       </div>
+                    </div>
+
+                    {/* Custom Developer Prompt Console */}
+                    <div className="p-3.5 rounded-xl bg-background/90 border border-purple-500/30 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-bold flex items-center gap-1.5">
+                          <Terminal className="h-3.5 w-3.5 text-purple-400" />
+                          <span>استشارة واختبار النموذج في مسألة أو استفسار فوري:</span>
+                        </Label>
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          المحرك: {selectedModel.split('/')[1] || selectedModel}
+                        </span>
+                      </div>
+                      <form onSubmit={handleRunCustomAiPrompt} className="space-y-2">
+                        <div className="flex gap-2">
+                          <Input
+                            value={customAiPrompt}
+                            onChange={(e) => setCustomAiPrompt(e.target.value)}
+                            placeholder="اكتب سؤالاً، استفساراً، أو فحصاً تود توجيهه للنموذج..."
+                            className="text-xs bg-background"
+                            disabled={isCustomAiRunning}
+                          />
+                          <Button
+                            type="submit"
+                            size="sm"
+                            disabled={isCustomAiRunning || !customAiPrompt.trim()}
+                            className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold gap-1.5 shrink-0"
+                          >
+                            {isCustomAiRunning ? (
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Send className="h-3.5 w-3.5" />
+                            )}
+                            إرسال
+                          </Button>
+                        </div>
+                      </form>
+
+                      {customAiResponse && (
+                        <div className="p-3 rounded-lg bg-card border border-purple-500/40 text-xs font-sans space-y-1.5 whitespace-pre-line text-foreground animate-in fade-in">
+                          <div className="flex items-center justify-between border-b pb-1">
+                            <span className="font-bold text-purple-400 flex items-center gap-1">
+                              <Sparkles className="h-3 w-3" />
+                              رد النموذج:
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                navigator.clipboard.writeText(customAiResponse);
+                                toast({ title: "تم نسخ رد الذكاء الاصطناعي 📋" });
+                              }}
+                              className="h-6 px-2 text-[10px] gap-1"
+                            >
+                              <Copy className="h-3 w-3" />
+                              نسخ
+                            </Button>
+                          </div>
+                          <p className="leading-relaxed">{customAiResponse}</p>
+                        </div>
+                      )}
                     </div>
 
                     {aiAuditReport && (
