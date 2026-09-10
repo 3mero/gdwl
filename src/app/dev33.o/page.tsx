@@ -14,7 +14,7 @@ import {
   CheckSquare, Square, Globe, CheckCircle2, MessageSquare, Trash2, Smartphone,
   Laptop, Check, AlertTriangle, CalendarPlus, Clock, Crown, BarChart3, Radio,
   Copy, Mail, CheckCheck, Undo2, Search, Download, PlusCircle, Filter, ExternalLink,
-  MessageCircle, Phone
+  MessageCircle, Phone, MapPin, Monitor
 } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
@@ -62,6 +62,24 @@ interface AuditLogEntry {
   ip?: string;
 }
 
+// Real Visitor Session tracking shape
+interface VisitorSession {
+  id: string;
+  ip: string;
+  country: string;
+  countryCode: string;
+  city: string;
+  deviceType: 'iphone' | 'android' | 'windows' | 'mac' | 'other';
+  deviceModel: string;
+  browser: string;
+  screen?: string;
+  isPwa: boolean;
+  language?: string;
+  firstSeen: string;
+  lastSeen: string;
+  visitCount: number;
+}
+
 const DEFAULT_PIN = "omarkhl";
 const MAX_ATTEMPTS = 5;
 const REAL_LOCKOUT_MS = 60 * 1000;
@@ -92,16 +110,19 @@ export default function SuperAdminDevPage() {
   // System & Telemetry State
   const [globalDataVersion, setGlobalDataVersion] = useState(1);
   const [stats, setStats] = useState({
-    totalSyncs: 42,
-    activeToday: 18,
-    activeWeekly: 114,
-    activeMonthly: 460,
+    totalSyncs: 0,
+    activeToday: 0,
+    activeWeekly: 0,
+    activeMonthly: 0,
     lastSyncAt: null as string | null,
-    pwaUsers: 68,
-    webUsers: 32,
-    devices: { iphone: 45, android: 38, windows: 14, mac: 3, other: 0 },
+    pwaUsers: 0,
+    webUsers: 0,
+    devices: { iphone: 0, android: 0, windows: 0, mac: 0, other: 0 },
     hourlyActivity: new Array(24).fill(0),
   });
+  const [recentVisitors, setRecentVisitors] = useState<VisitorSession[]>([]);
+  const [visitorSearch, setVisitorSearch] = useState('');
+  const [isResettingStats, setIsResettingStats] = useState(false);
   const [emergencyHolidays, setEmergencyHolidays] = useState<EmergencyHoliday[]>([]);
   const [feedbacks, setFeedbacks] = useState<UserFeedback[]>([]);
   const [feedbackFilter, setFeedbackFilter] = useState<'all' | 'bug' | 'suggestion' | 'feature' | 'unresolved' | 'resolved'>('all');
@@ -159,6 +180,17 @@ export default function SuperAdminDevPage() {
     if (savedPinAuth === 'true') {
       setIsPinAuthenticated(true);
     }
+    // Load cached real stats and visitors from localStorage against cold starts
+    try {
+      const cachedVisitors = localStorage.getItem('gdwl_cached_real_visitors');
+      if (cachedVisitors) {
+        setRecentVisitors(JSON.parse(cachedVisitors));
+      }
+      const cachedStats = localStorage.getItem('gdwl_cached_real_stats');
+      if (cachedStats) {
+        setStats(JSON.parse(cachedStats));
+      }
+    } catch {}
   }, []);
 
   // Lockout timer
@@ -183,15 +215,22 @@ export default function SuperAdminDevPage() {
   const fetchSystemState = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/stats/ping');
+      const res = await fetch(`/api/stats/ping?_t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       if (data && data.success && data.data) {
         const d = data.data;
         setGlobalDataVersion(d.globalDataVersion || 1);
         setStats(d.stats || stats);
+        if (d.stats) {
+          localStorage.setItem('gdwl_cached_real_stats', JSON.stringify(d.stats));
+        }
         setEmergencyHolidays(d.emergencyHolidays || []);
         setFeedbacks(d.feedbacks || []);
         setAuditLogs(d.auditLogs || []);
+        if (d.recentVisitors) {
+          setRecentVisitors(d.recentVisitors);
+          localStorage.setItem('gdwl_cached_real_visitors', JSON.stringify(d.recentVisitors));
+        }
         setAnnouncement(d.announcement || { enabled: false, message: '', type: 'info' });
         setMaintenanceMode(!!d.maintenanceMode);
         if (d.customPinHash) {
@@ -539,6 +578,56 @@ export default function SuperAdminDevPage() {
     window.open(`tel:${cleanPhone}`, '_blank');
   };
 
+  // Reset All Analytics and Visitors to Zero
+  const handleResetAnalyticsToZero = async () => {
+    if (!window.confirm("تحذير إداري: هل أنت متأكد من تصفير كافة العدادات والبدء بإحصاء حقيقي نظيف من الصفر 0؟ سيتم مسح الأرقام وسجل الزوار القديم لتبدأ الإحصائيات الفعلية من الآن.")) {
+      return;
+    }
+    setIsResettingStats(true);
+    try {
+      const res = await fetch('/api/stats/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset_analytics_to_zero' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStats(data.data.stats);
+        setRecentVisitors([]);
+        localStorage.removeItem('gdwl_cached_real_visitors');
+        localStorage.removeItem('gdwl_cached_real_stats');
+        toast({
+          title: "🧹 تم تصفير كافة العدادات وسجل الزوار بنجاح",
+          description: "تبدأ الآن الإحصائيات من الصفر 0، وسيُسجل كل زائر حقيقي يدخل التطبيق.",
+        });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "فشل تصفير العدادات" });
+    } finally {
+      setIsResettingStats(false);
+    }
+  };
+
+  // Delete Single Visitor Log
+  const handleDeleteVisitor = async (id: string) => {
+    try {
+      const res = await fetch('/api/stats/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_visitor_log', id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const updated = data.data.recentVisitors || [];
+        setRecentVisitors(updated);
+        localStorage.setItem('gdwl_cached_real_visitors', JSON.stringify(updated));
+        toast({ title: id ? "تم حذف جلسة الزائر 🗑️" : "تم مسح سجل الزوار بنجاح 🧹" });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "فشل الحذف" });
+    }
+  };
+
   // Change Master PIN
   const handleChangePin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -767,6 +856,19 @@ export default function SuperAdminDevPage() {
       if (!matchMsg && !matchContact && !matchPlatform) return false;
     }
     return true;
+  });
+
+  // Filtered Real Visitors Feed
+  const filteredVisitors = recentVisitors.filter((v) => {
+    if (!visitorSearch.trim()) return true;
+    const q = visitorSearch.toLowerCase();
+    return (
+      (v.ip && v.ip.toLowerCase().includes(q)) ||
+      (v.city && v.city.toLowerCase().includes(q)) ||
+      (v.country && v.country.toLowerCase().includes(q)) ||
+      (v.deviceModel && v.deviceModel.toLowerCase().includes(q)) ||
+      (v.browser && v.browser.toLowerCase().includes(q))
+    );
   });
 
   if (!mounted) {
@@ -1089,14 +1191,27 @@ export default function SuperAdminDevPage() {
 
               {/* PILLAR 2: REAL PERSISTENT ANALYTICS */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <BarChart3 className="h-5 w-5 text-primary" />
-                    <h2 className="text-lg font-bold">2️⃣ الإحصائيات الدائمة والحقيقية (Real Persistent Analytics)</h2>
+                    <h2 className="text-lg font-bold">2️⃣ الإحصائيات الدائمة وسجل الزوار الفعلي (Real Persistent Analytics)</h2>
                   </div>
-                  <span className="text-xs bg-primary/15 text-primary px-2.5 py-0.5 rounded-full font-bold">
-                    حفظ دائم
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleResetAnalyticsToZero}
+                      disabled={isResettingStats}
+                      className="h-7 text-xs gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                      title="تصفير كافة العدادات وسجل الزوار للبدء بإحصاء حقيقي من الصفر 0"
+                    >
+                      {isResettingStats ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                      <span>تصفير العدادات والبدء من 0</span>
+                    </Button>
+                    <span className="text-xs bg-primary/15 text-primary px-2.5 py-0.5 rounded-full font-bold">
+                      حفظ دائم
+                    </span>
+                  </div>
                 </div>
 
                 {/* Counters Grid */}
@@ -1204,6 +1319,158 @@ export default function SuperAdminDevPage() {
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Real-Time Live Visitors Log Feed Card */}
+                <Card className="border-border shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-2.5 w-2.5 relative">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                          </span>
+                          <CardTitle className="text-base font-bold flex items-center gap-1.5">
+                            سجل الزوار الحقيقي وآخر المتصلين اليوم (Live Visitors Feed)
+                          </CardTitle>
+                        </div>
+                        <CardDescription className="text-xs mt-1">
+                          رصد لحظي فوري لكل جهاز يفتح التطبيق مع تفاصيل الـ IP، الموقع الجغرافي، طراز الجهاز، ودقة الشاشة.
+                        </CardDescription>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="relative w-full sm:w-64">
+                          <Search className="h-3.5 w-3.5 absolute right-2.5 top-2.5 text-muted-foreground" />
+                          <Input
+                            value={visitorSearch}
+                            onChange={(e) => setVisitorSearch(e.target.value)}
+                            placeholder="بحث بالـ IP، المدينة، أو الجهاز..."
+                            className="text-xs pr-8 h-8 bg-background"
+                          />
+                        </div>
+                        {recentVisitors.length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (window.confirm("هل تريد مسح سجل الزوار المعروض حالياً؟")) {
+                                handleDeleteVisitor('');
+                              }
+                            }}
+                            className="h-8 text-xs text-muted-foreground hover:text-destructive gap-1 shrink-0"
+                            title="مسح سجل الزوار"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            مسح السجل
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent>
+                    {filteredVisitors.length === 0 ? (
+                      <div className="p-8 text-center bg-muted/20 rounded-xl border border-dashed text-xs text-muted-foreground space-y-2">
+                        <Globe2 className="h-8 w-8 mx-auto text-muted-foreground/50" />
+                        <p className="font-bold text-foreground">
+                          {visitorSearch ? 'لا توجد جلسات تطابق البحث' : 'لا توجد جلسات زوار مسجلة بعد'}
+                        </p>
+                        <p className="text-[11px]">
+                          {visitorSearch
+                            ? 'جرب البحث بكلمة أخرى'
+                            : 'بمجرد أن يفتح أي جهاز أو هاتف التطبيق سيتم التقاط جلسته بالـ IP والموقع ونوع الجهاز وتظهر هنا فوراً.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <div className="text-[11px] text-muted-foreground flex items-center justify-between pb-1 border-b">
+                          <span>إجمالي الجلسات المسجلة: <strong className="text-foreground">{filteredVisitors.length}</strong></span>
+                          <span>الموقع الأكثر نشاطاً: <strong className="text-emerald-500">🇴🇲 سلطنة عُمان</strong></span>
+                        </div>
+
+                        <div className="divide-y divide-border/60">
+                          {filteredVisitors.map((v) => (
+                            <div key={v.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-muted/30 px-2 rounded-lg transition-colors text-xs">
+                              {/* Left: Device & Location details */}
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-foreground flex items-center gap-1">
+                                    {v.deviceType === 'iphone' ? <Smartphone className="h-3.5 w-3.5 text-blue-500" /> :
+                                     v.deviceType === 'android' ? <Smartphone className="h-3.5 w-3.5 text-emerald-500" /> :
+                                     v.deviceType === 'windows' ? <Monitor className="h-3.5 w-3.5 text-purple-500" /> :
+                                     <Laptop className="h-3.5 w-3.5 text-amber-500" />}
+                                    {v.deviceModel}
+                                  </span>
+
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                    v.isPwa ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30' : 'bg-muted text-muted-foreground'
+                                  }`}>
+                                    {v.isPwa ? '📱 PWA مثبت' : '🌐 متصفح ويب'}
+                                  </span>
+
+                                  <span className="text-[10px] text-muted-foreground font-mono bg-muted/60 px-1.5 py-0.5 rounded">
+                                    {v.browser}
+                                  </span>
+
+                                  {v.screen && (
+                                    <span className="text-[10px] text-muted-foreground font-mono">
+                                      📐 {v.screen}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                                  <span className="flex items-center gap-1 font-semibold text-foreground">
+                                    <MapPin className="h-3 w-3 text-red-500" />
+                                    {v.country} {v.city ? `(${v.city})` : ''}
+                                  </span>
+
+                                  <span className="font-mono flex items-center gap-1 bg-background border px-1.5 py-0.5 rounded text-[10px]">
+                                    IP: {v.ip}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(v.ip);
+                                        toast({ title: "تم نسخ الـ IP 📋" });
+                                      }}
+                                      className="hover:text-primary"
+                                      title="نسخ IP"
+                                    >
+                                      <Copy className="h-2.5 w-2.5" />
+                                    </button>
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Right: Timestamp & Actions */}
+                              <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                                <div className="text-left sm:text-right">
+                                  <p className="text-[11px] font-mono text-foreground">
+                                    {new Date(v.lastSeen || v.firstSeen).toLocaleTimeString('ar-OM', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {v.visitCount > 1 ? `${v.visitCount} تفاعلات` : 'زيارة أولى'}
+                                  </p>
+                                </div>
+
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteVisitor(v.id)}
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  title="حذف الجلسة"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
 
               {/* PILLAR 3: BROADCAST & FEEDBACK HUB */}

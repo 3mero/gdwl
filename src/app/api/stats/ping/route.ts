@@ -38,6 +38,24 @@ export interface AuditLogEntry {
   ip?: string;
 }
 
+// Shape of real visitor session
+export interface VisitorSession {
+  id: string;
+  ip: string;
+  country: string;
+  countryCode: string;
+  city: string;
+  deviceType: 'iphone' | 'android' | 'windows' | 'mac' | 'other';
+  deviceModel: string;
+  browser: string;
+  screen?: string;
+  isPwa: boolean;
+  language?: string;
+  firstSeen: string;
+  lastSeen: string;
+  visitCount: number;
+}
+
 // Full admin persistent state
 interface AdminSystemState {
   globalDataVersion: number;
@@ -69,26 +87,27 @@ interface AdminSystemState {
   maintenanceMode: boolean;
   customPinHash: string | null; // Optional custom PIN hash or raw token
   auditLogs: AuditLogEntry[];
+  recentVisitors: VisitorSession[];
 }
 
 const DEFAULT_STATE: AdminSystemState = {
   globalDataVersion: 1,
   stats: {
-    totalSyncs: 42,
-    activeToday: 18,
-    activeWeekly: 114,
-    activeMonthly: 460,
+    totalSyncs: 0,
+    activeToday: 0,
+    activeWeekly: 0,
+    activeMonthly: 0,
     lastSyncAt: new Date().toISOString(),
-    pwaUsers: 68,
-    webUsers: 32,
+    pwaUsers: 0,
+    webUsers: 0,
     devices: {
-      iphone: 45,
-      android: 38,
-      windows: 14,
-      mac: 3,
+      iphone: 0,
+      android: 0,
+      windows: 0,
+      mac: 0,
       other: 0,
     },
-    hourlyActivity: [2, 1, 0, 0, 1, 3, 8, 14, 22, 28, 24, 19, 16, 21, 26, 31, 27, 20, 15, 12, 9, 6, 4, 3],
+    hourlyActivity: new Array(24).fill(0),
   },
   emergencyHolidays: [],
   feedbacks: [],
@@ -101,7 +120,84 @@ const DEFAULT_STATE: AdminSystemState = {
   maintenanceMode: false,
   customPinHash: null,
   auditLogs: [],
+  recentVisitors: [],
 };
+
+// Parse User-Agent into detailed device and browser labels
+function parseClientInfo(userAgent: string, rawPlatform: string) {
+  let deviceType: 'iphone' | 'android' | 'windows' | 'mac' | 'other' = 'other';
+  let deviceModel = 'جهاز غير معروف';
+  let browser = 'متصفح ويب';
+
+  const ua = userAgent || '';
+
+  // Browser detection
+  if (/Edg\//i.test(ua)) {
+    browser = 'Microsoft Edge';
+  } else if (/Chrome\//i.test(ua) && !/Chromium|OPR/i.test(ua)) {
+    browser = 'Google Chrome';
+  } else if (/Safari\//i.test(ua) && !/Chrome|Chromium/i.test(ua)) {
+    browser = 'Apple Safari';
+  } else if (/Firefox\//i.test(ua)) {
+    browser = 'Mozilla Firefox';
+  } else if (/OPR|Opera/i.test(ua)) {
+    browser = 'Opera Browser';
+  }
+
+  // OS & Device detection
+  if (/iPhone/i.test(ua)) {
+    deviceType = 'iphone';
+    const match = ua.match(/OS (\d+[_\d]*)/i);
+    const osVer = match ? match[1].replace(/_/g, '.') : '';
+    deviceModel = osVer ? `iPhone (iOS ${osVer})` : 'Apple iPhone';
+  } else if (/iPad/i.test(ua)) {
+    deviceType = 'iphone';
+    deviceModel = 'Apple iPad';
+  } else if (/Android/i.test(ua)) {
+    deviceType = 'android';
+    const match = ua.match(/Android\s+([\d.]+)/i);
+    const osVer = match ? `v${match[1]}` : '';
+    const modelMatch = ua.match(/;\s*([^;)]+)\s+Build\//i);
+    const model = modelMatch ? modelMatch[1].trim() : '';
+    deviceModel = model ? `${model} (Android ${osVer})` : `Android ${osVer}`.trim();
+  } else if (/Windows NT/i.test(ua)) {
+    deviceType = 'windows';
+    const match = ua.match(/Windows NT ([\d.]+)/i);
+    const ntVer = match ? match[1] : '';
+    const winVer = ntVer === '10.0' ? '10/11' : ntVer === '6.3' ? '8.1' : ntVer === '6.1' ? '7' : '';
+    deviceModel = winVer ? `Windows ${winVer} PC` : 'Windows PC';
+  } else if (/Macintosh|Mac OS X/i.test(ua)) {
+    deviceType = 'mac';
+    deviceModel = 'Apple Mac';
+  } else {
+    deviceType = (rawPlatform as any) || 'other';
+    deviceModel = rawPlatform === 'iphone' ? 'Apple iPhone' :
+                  rawPlatform === 'android' ? 'Android Device' :
+                  rawPlatform === 'windows' ? 'Windows PC' :
+                  rawPlatform === 'mac' ? 'Apple Mac' : 'جهاز غير معروف';
+  }
+
+  return { deviceType, deviceModel, browser };
+}
+
+// Map Country Code to Arabic Name and Flag Emoji
+function getCountryDetails(code: string | null) {
+  const c = (code || 'OM').toUpperCase();
+  const map: Record<string, { name: string; flag: string }> = {
+    OM: { name: 'سلطنة عُمان', flag: '🇴🇲' },
+    SA: { name: 'المملكة العربية السعودية', flag: '🇸🇦' },
+    AE: { name: 'الإمارات العربية المتحدة', flag: '🇦🇪' },
+    QA: { name: 'قطر', flag: '🇶🇦' },
+    KW: { name: 'الكويت', flag: '🇰🇼' },
+    BH: { name: 'البحرين', flag: '🇧🇭' },
+    EG: { name: 'مصر', flag: '🇪🇬' },
+    JO: { name: 'الأردن', flag: '🇯🇴' },
+    US: { name: 'الولايات المتحدة', flag: '🇺🇸' },
+    GB: { name: 'المملكة المتحدة', flag: '🇬🇧' },
+    DE: { name: 'ألمانيا', flag: '🇩🇪' },
+  };
+  return map[c] || { name: c, flag: '🌐' };
+}
 
 // In-memory runtime cache
 let memoryState: AdminSystemState = { ...DEFAULT_STATE };
@@ -118,6 +214,7 @@ function loadPersistentState(): AdminSystemState {
       memoryState = {
         ...DEFAULT_STATE,
         ...parsed,
+        recentVisitors: parsed.recentVisitors || [],
         stats: {
           ...DEFAULT_STATE.stats,
           ...(parsed.stats || {}),
@@ -231,30 +328,93 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const state = loadPersistentState();
 
-    // 1. Client anonymous telemetry
+    // 1. Client Live Telemetry & Session Tracking
     if (body.action === 'client_telemetry') {
       const isPwa = !!body.isPwa;
-      const platform = (body.platform || 'other') as 'iphone' | 'android' | 'windows' | 'mac' | 'other';
+      const userAgent = request.headers.get('user-agent') || '';
+      const { deviceType, deviceModel, browser } = parseClientInfo(userAgent, body.platform || 'other');
+
+      // Extract real client IP
+      const forwardedFor = request.headers.get('x-forwarded-for');
+      const realIp = request.headers.get('x-real-ip');
+      const clientIp = forwardedFor ? forwardedFor.split(',')[0].trim() : (realIp || '127.0.0.1');
+
+      // Geo info from Vercel edge headers
+      const countryCode = request.headers.get('x-vercel-ip-country') || 'OM';
+      const rawCity = request.headers.get('x-vercel-ip-city') || '';
+      let city = 'مسقط';
+      try {
+        city = rawCity ? decodeURIComponent(rawCity) : (countryCode === 'OM' ? 'مسقط' : '');
+      } catch {
+        city = rawCity || '';
+      }
+      const { name: countryName, flag: countryFlag } = getCountryDetails(countryCode);
+
+      const sessionId = body.sessionId || `session_${clientIp.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const now = new Date().toISOString();
+
+      if (!state.recentVisitors) {
+        state.recentVisitors = [];
+      }
+
+      // Check if session or device already exists
+      const existingIdx = state.recentVisitors.findIndex(
+        v => v.id === sessionId || (v.ip === clientIp && v.deviceModel === deviceModel)
+      );
+
+      if (existingIdx >= 0) {
+        // Update existing active visitor session
+        state.recentVisitors[existingIdx].lastSeen = now;
+        state.recentVisitors[existingIdx].visitCount = (state.recentVisitors[existingIdx].visitCount || 1) + 1;
+        if (body.screen) state.recentVisitors[existingIdx].screen = body.screen;
+      } else {
+        // New unique visitor session
+        const newVisitor: VisitorSession = {
+          id: sessionId,
+          ip: clientIp,
+          country: `${countryFlag} ${countryName}`,
+          countryCode,
+          city: city || 'مسقط',
+          deviceType,
+          deviceModel,
+          browser,
+          screen: body.screen || '',
+          isPwa,
+          language: body.language || 'ar',
+          firstSeen: now,
+          lastSeen: now,
+          visitCount: 1,
+        };
+
+        state.recentVisitors.unshift(newVisitor);
+        if (state.recentVisitors.length > 80) {
+          state.recentVisitors = state.recentVisitors.slice(0, 80);
+        }
+
+        // Increment device metrics
+        if (state.stats.devices[deviceType] !== undefined) {
+          state.stats.devices[deviceType] = (state.stats.devices[deviceType] || 0) + 1;
+        } else {
+          state.stats.devices.other = (state.stats.devices.other || 0) + 1;
+        }
+
+        if (isPwa) {
+          state.stats.pwaUsers = (state.stats.pwaUsers || 0) + 1;
+        } else {
+          state.stats.webUsers = (state.stats.webUsers || 0) + 1;
+        }
+
+        state.stats.activeToday = (state.stats.activeToday || 0) + 1;
+        state.stats.activeWeekly = (state.stats.activeWeekly || 0) + 1;
+        state.stats.totalSyncs = (state.stats.totalSyncs || 0) + 1;
+      }
+
       const localHour = typeof body.localHour === 'number' && body.localHour >= 0 && body.localHour <= 23 ? body.localHour : new Date().getHours();
-
-      if (isPwa) {
-        state.stats.pwaUsers = (state.stats.pwaUsers || 0) + 1;
-      } else {
-        state.stats.webUsers = (state.stats.webUsers || 0) + 1;
-      }
-
-      if (state.stats.devices[platform] !== undefined) {
-        state.stats.devices[platform] = (state.stats.devices[platform] || 0) + 1;
-      } else {
-        state.stats.devices.other = (state.stats.devices.other || 0) + 1;
-      }
-
       if (!state.stats.hourlyActivity || state.stats.hourlyActivity.length !== 24) {
         state.stats.hourlyActivity = new Array(24).fill(0);
       }
       state.stats.hourlyActivity[localHour] = (state.stats.hourlyActivity[localHour] || 0) + 1;
-      state.stats.activeToday = (state.stats.activeToday || 0) + 1;
-      state.stats.lastSyncAt = new Date().toISOString();
+      state.stats.lastSyncAt = now;
 
       savePersistentState(state);
       return NextResponse.json({
@@ -456,23 +616,39 @@ export async function POST(request: Request) {
       });
     }
 
-    // 10. Reset stats
-    if (body.action === 'reset_stats') {
+    // 10. Reset stats / Clean Zero State
+    if (body.action === 'reset_stats' || body.action === 'reset_analytics_to_zero') {
       state.stats = {
         totalSyncs: 0,
         activeToday: 0,
         activeWeekly: 0,
         activeMonthly: 0,
-        lastSyncAt: null,
+        lastSyncAt: new Date().toISOString(),
         pwaUsers: 0,
         webUsers: 0,
         devices: { iphone: 0, android: 0, windows: 0, mac: 0, other: 0 },
         hourlyActivity: new Array(24).fill(0),
       };
+      state.recentVisitors = [];
       savePersistentState(state);
       return NextResponse.json({
         success: true,
-        message: 'تم إعادة ضبط الإحصائيات بنجاح',
+        message: 'تم تصفير كافة العدادات وسجل الزوار بنجاح والبدء من الصفر 0',
+        data: state,
+      });
+    }
+
+    // 11. Delete single visitor session or clear all visitors
+    if (body.action === 'delete_visitor_log') {
+      if (body.id) {
+        state.recentVisitors = (state.recentVisitors || []).filter(v => v.id !== body.id);
+      } else {
+        state.recentVisitors = [];
+      }
+      savePersistentState(state);
+      return NextResponse.json({
+        success: true,
+        message: 'تم تحديث سجل الزوار',
         data: state,
       });
     }

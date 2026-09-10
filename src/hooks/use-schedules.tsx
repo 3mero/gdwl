@@ -175,13 +175,25 @@ export function SchedulesProvider({ children }: { children: ReactNode }) {
         setActiveScheduleId(null);
       }
 
-      // Anonymous lightweight telemetry & Remote Cache Sync
+      // Real Live Telemetry & Remote Cache Sync
       const isPwa = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
       const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
       const platform = /iPhone|iPad|iPod/.test(userAgent) ? 'iphone' :
                        /Android/.test(userAgent) ? 'android' :
                        /Windows/.test(userAgent) ? 'windows' :
                        /Macintosh/.test(userAgent) ? 'mac' : 'other';
+
+      // Unique session / client fingerprint
+      let sessionId = '';
+      if (typeof window !== 'undefined') {
+        sessionId = sessionStorage.getItem('gdwl_session_id') || '';
+        if (!sessionId) {
+          sessionId = 'sess_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+          sessionStorage.setItem('gdwl_session_id', sessionId);
+        }
+      }
+
+      const screenRes = typeof window !== 'undefined' && window.screen ? `${window.screen.width}x${window.screen.height}` : '';
 
       fetch('/api/stats/ping', {
         method: 'POST',
@@ -190,6 +202,9 @@ export function SchedulesProvider({ children }: { children: ReactNode }) {
           action: 'client_telemetry',
           isPwa,
           platform,
+          sessionId,
+          screen: screenRes,
+          language: typeof navigator !== 'undefined' ? navigator.language : 'ar',
           localHour: new Date().getHours(),
         }),
       })
