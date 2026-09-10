@@ -2,7 +2,7 @@
 "use client";
 
 import React from 'react';
-import { Calendar, Settings, ChevronDown, Check, Palette, Camera, Loader2, Download, Upload, Trash2, PlusCircle, Info, Smartphone, CalendarDays, SlidersHorizontal, Paintbrush, Save, Mail, Library, RotateCw } from 'lucide-react';
+import { Calendar, Settings, ChevronDown, Check, Palette, Camera, Loader2, Download, Upload, Trash2, PlusCircle, Info, Smartphone, CalendarDays, SlidersHorizontal, Paintbrush, Save, Mail, Library, RotateCw, Sparkles, ShieldCheck, Cloud, Bell } from 'lucide-react';
 import { useSchedules } from '@/hooks/use-schedules';
 import { Button } from '@/components/ui/button';
 import {
@@ -44,13 +44,17 @@ import { cn } from '@/lib/utils';
 import { ScrollArea } from './ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Separator } from './ui/separator';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
+import { GoogleSyncButton } from './google-sync-button';
+import { NotificationBell } from './notification-bell';
 import Link from 'next/link';
+
 
 
 type AppHeaderProps = {
   onCapture: () => void;
   captureStatus: 'idle' | 'capturing' | 'success';
-  onOpenSettings: () => void;
+  onOpenSettings: (tab?: 'settings' | 'notifications') => void;
   onOpenHolidays: () => void;
   installPrompt: any;
   isAppInstalled: boolean;
@@ -224,12 +228,16 @@ export function AppHeader({
                   <span className="sr-only">فتح الإعدادات</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" dir="rtl">
+              <DropdownMenuContent align="start">
                 <DropdownMenuLabel>الإعدادات العامة</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onOpenSettings}>
+                <DropdownMenuItem onSelect={() => onOpenSettings('settings')}>
                   <SlidersHorizontal className="ml-2 h-4 w-4 text-blue-400" />
                   <span>إعدادات الجداول والواجهة</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onOpenSettings('notifications')}>
+                  <Bell className="ml-2 h-4 w-4 text-amber-400" />
+                  <span>مركز التنبيهات والإشعارات</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/overview">
@@ -259,6 +267,9 @@ export function AppHeader({
               </DropdownMenuContent>
             </DropdownMenu>
 
+            <GoogleSyncButton />
+            <NotificationBell onClick={() => onOpenSettings('notifications')} />
+
             <div className="hidden md:flex items-center gap-2" data-capture-btn="true">
               <Button variant="outline" onClick={onCapture} disabled={captureStatus !== 'idle'} className="w-36">
                   {getCaptureButtonContent()}
@@ -273,7 +284,7 @@ export function AppHeader({
                     <span className="truncate">{activeSchedule.name}</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56" dir="rtl">
+                <DropdownMenuContent align="start" className="w-56">
                   <DropdownMenuLabel>تبديل الجدول</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {schedules.map((schedule) => (
@@ -309,59 +320,77 @@ export function AppHeader({
         </div>
       </header>
       
-      <Dialog open={isAboutDialogOpen} onOpenChange={setIsAboutDialogOpen}>
-        <DialogContent className="max-w-md h-auto flex flex-col max-h-[80vh]" dir="rtl">
-            <DialogHeader className="shrink-0">
-                <DialogTitle>حول تطبيق جداول العمل</DialogTitle>
-                <DialogDescription>تطبيق بسيط وفعال لتنظيم جداول العمل.</DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
-                <div className="py-4 space-y-6">
-                    <Card className="bg-accent/30">
-                        <CardContent className="p-4 text-center">
-                            <p className="font-semibold">المطور</p>
-                            <p className="text-primary font-bold text-lg">عمر الوهيبي</p>
-                            <p className="text-xs text-muted-foreground">
-                                تم التطوير باستخدام Google Gemini & Firebase Studio
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <div className="space-y-3">
-                        <h4 className="text-center font-semibold">للتواصل</h4>
-                        <div className="flex justify-center gap-4">
-                            <a href="https://wa.me/96892670679" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-green-500 hover:text-green-400 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
-                                <span>واتساب</span>
-                            </a>
-                            <a href="mailto:alomar3363@gamil.com" className="flex items-center gap-2 text-blue-500 hover:text-blue-400 transition-colors">
-                                <Mail className="h-6 w-6" />
-                                <span>البريد الإلكتروني</span>
-                            </a>
-                        </div>
-                    </div>
-
-                    <Separator />
-
-                    <div className="space-y-3">
-                        <h4 className="text-center font-semibold">أهم مميزات التطبيق</h4>
-                        <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground text-right">
-                            <li><span className="font-semibold text-foreground">الخصوصية أولاً:</span> جميع جداولك وبياناتك تحفظ على جهازك فقط.</li>
-                            <li><span className="font-semibold text-foreground">تخصيص كامل:</span> تحكم في ألوان الواجهة، تخطيط التقويم، وخلفيات الأشهر.</li>
-                            <li><span className="font-semibold text-foreground">جداول متعددة:</span> أنشئ وأدِر عدة جداول عمل مختلفة وتبدل بينها بسهولة.</li>
-                            <li><span className="font-semibold text-foreground">ملاحظات وتثبيت:</span> أضف ملاحظات وعناوين للأيام المهمة وقم بتثبيتها للوصول السريع.</li>
-                            <li><span className="font-semibold text-foreground">إجازات رسمية:</span> استورد الإجازات الرسمية لأي دولة وأضفها لجدولك.</li>
-                            <li><span className="font-semibold text-foreground">حفظ ومشاركة:</span> صدر بياناتك بالكامل كنسخة احتياطية، واحفظ جدولك كصورة عالية الجودة.</li>
-                            <li><span className="font-semibold text-foreground">تطبيق ويب تقدمي (PWA):</span> قم بتثبيت التطبيق على جهازك للوصول السريع والعمل دون اتصال.</li>
-                        </ul>
-                    </div>
+      <Sheet open={isAboutDialogOpen} onOpenChange={setIsAboutDialogOpen}>
+        <SheetContent className="w-full sm:max-w-md flex flex-col" dir="rtl">
+          <SheetHeader className="text-right">
+            <SheetTitle className="flex items-center gap-2 text-primary">
+              <Info className="h-5 w-5 text-yellow-400" />
+              حول التطبيق
+            </SheetTitle>
+            <SheetDescription>
+              المنظومة الذكية لتنظيم ومزامنة جداولك وإجازاتك الرسمية.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 min-h-0">
+            <ScrollArea className="h-full pr-4">
+              <div className="space-y-4 pb-4">
+                {/* Developer Card */}
+                <div className="bg-gradient-to-r from-primary/10 via-accent/30 to-primary/5 border border-primary/20 rounded-xl p-4 text-center space-y-1">
+                  <p className="text-xs text-muted-foreground font-semibold">المطور الرئيسي</p>
+                  <p className="text-primary font-extrabold text-lg">عمر الوهيبي</p>
+                  <p className="text-[11px] text-muted-foreground/80">
+                    تم التطوير باستخدام Google Gemini AI &amp; Firebase Studio
+                  </p>
                 </div>
+
+                {/* Contact Links */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">تواصل مع المطور</h3>
+                  <div className="flex gap-2">
+                    <a href="https://wa.me/96892670679" target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500/20 border border-green-500/20 text-xs font-bold transition-all">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                      واتساب مباشر
+                    </a>
+                    <a href="mailto:alomar3363@gmail.com" className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border border-blue-500/20 text-xs font-bold transition-all">
+                      <Mail className="h-4 w-4" />
+                      البريد الإلكتروني
+                    </a>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Features */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-amber-400" />
+                    أهم مميزات التطبيق
+                  </h3>
+                  
+                  <div className="space-y-2">
+                    {[
+                      { icon: <ShieldCheck className="h-4 w-4 text-emerald-400" />, title: 'الخصوصية والعزل التام', desc: 'ملاحظاتك شخصية 100% ولن يقرأها البوت، مع عزل كامل لإجازات الدول باللون الأحمر.' },
+                      { icon: <Sparkles className="h-4 w-4 text-purple-400" />, title: 'محرك إجازات الدول الذكي', desc: 'متابعة وترجمة وإدراج الإجازات الرسمية لـ 18 دولة عربية تلقائياً في الجدول.' },
+                      { icon: <Cloud className="h-4 w-4 text-blue-400" />, title: 'مزامنة سحابية مع Google Drive', desc: 'مزامنة احتياطية سحابية صامتة فور الدخول لحفظ جميع تغييراتك.' },
+                      { icon: <Bell className="h-4 w-4 text-red-400" />, title: 'مركز التنبيهات المتقدم', desc: 'سجل يستوعب أحدث 100 تنبيه مع قائمة حظر وحذف الإشعارات الفردية.' },
+                      { icon: <Palette className="h-4 w-4 text-pink-400" />, title: 'تخصيص كامل للألوان', desc: 'تحكم كامل بألوان الأيام، الثيمات، تخطيط التقويم، وخلفيات الأشهر.' },
+                      { icon: <Smartphone className="h-4 w-4 text-amber-400" />, title: 'تطبيق PWA بدون إنترنت', desc: 'تثبيت التطبيق على جهازك كـ App مستقل يعمل بدون اتصال بالإنترنت.' },
+                    ].map((f, i) => (
+                      <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-accent/30 border border-border/50">
+                        <div className="mt-0.5 shrink-0">{f.icon}</div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm text-primary">{f.title}</p>
+                          <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{f.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </ScrollArea>
-            <DialogFooter className="shrink-0 pt-4 border-t -mx-6 px-6">
-                <Button onClick={() => setIsAboutDialogOpen(false)} className="w-full">إغلاق</Button>
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
     <Dialog open={isColorPickerOpen} onOpenChange={setIsColorPickerOpen}>
         <DialogContent className="max-w-lg h-[90vh] sm:h-auto flex flex-col" dir="rtl" overlayClassName="no-overlay">
             <DialogHeader>

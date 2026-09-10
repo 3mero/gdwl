@@ -6,7 +6,7 @@ import { useSchedules } from '@/hooks/use-schedules';
 import { cn, formatDateKey } from '@/lib/utils';
 import { DayUnderlyingType, DayTypeDefinition } from '@/lib/types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { Pin, MessageSquare, Edit2, Check, X, Trash2 } from 'lucide-react';
+import { Pin, MessageSquare, Edit2, Check, X, Trash2, CalendarDays } from 'lucide-react';
 import { isSameDay } from 'date-fns';
 import { DayDetailDialog } from './day-detail-dialog';
 import {
@@ -57,8 +57,20 @@ export function DayCell({ day, currentDate, isHighlighted }: DayCellProps) {
   };
   
   const handleClearData = () => {
-    // Only clears note and pin, preserves the type
-    updateDay(dateKey, { title: undefined, note: undefined, pinned: false });
+    // Clears note, pin, and holiday
+    updateDay(dateKey, { title: undefined, note: undefined, pinned: false, event: undefined, holidayInfo: undefined });
+  };
+
+  const handleDeleteHoliday = () => {
+    if (!dayData) return;
+    const { holidayInfo, ...rest } = dayData;
+    if (rest.event) delete rest.event;
+    if (!rest.typeId && !rest.title && !rest.note && !rest.pinned) {
+      updateDay(dateKey, undefined);
+    } else {
+      updateDay(dateKey, rest);
+    }
+    setIsDetailOpen(false);
   };
 
   const isCurrentDay = isSameDay(day, currentDate);
@@ -108,28 +120,23 @@ export function DayCell({ day, currentDate, isHighlighted }: DayCellProps) {
     <div
       style={cellStyle}
       className={cn(
-        "relative flex aspect-square cursor-pointer items-center justify-center rounded-md border border-transparent transition-all duration-200 select-none hover:opacity-80",
-        isCurrentDay && 'border-red-500 ring-2 ring-red-500 shadow-md shadow-red-500/40',
+        "relative flex aspect-square cursor-pointer items-center justify-center rounded-md border border-transparent transition-all duration-200 select-none",
+        isCurrentDay && 'border-red-500 ring-2 ring-red-500',
         isHighlighted && "animate-flash border-2 border-transparent"
       )}
       onTouchStart={isMobile ? handleTouchStart : undefined}
       onTouchEnd={isMobile ? handleTouchEnd : undefined}
       onContextMenu={handleContextMenu}
     >
-      <span 
-        className={cn(
-          "text-sm font-bold",
-          isCurrentDay && "text-red-400"
-        )} 
-        style={isCurrentDay ? undefined : { color: getDayNumberColor() }}
-      >
-        {day.getDate()}
-      </span>
+      <span className="text-sm font-bold" style={{ color: getDayNumberColor() }}>{day.getDate()}</span>
       {dayData?.pinned && (
         <Pin className="absolute top-1 right-1 h-3 w-3 fill-red-500 text-red-500" />
       )}
       {(dayData?.note || dayData?.title) && (
-        <MessageSquare className="absolute bottom-1 left-1 h-3 w-3 fill-accent text-transparent" />
+        <MessageSquare className="absolute bottom-1 right-1 h-3 w-3 fill-accent text-transparent" />
+      )}
+      {(dayData?.holidayInfo || dayData?.event) && (
+        <CalendarDays className="absolute bottom-1 left-1 h-3.5 w-3.5 text-red-500 fill-red-500/25 animate-pulse" />
       )}
     </div>
   );
@@ -148,7 +155,7 @@ export function DayCell({ day, currentDate, isHighlighted }: DayCellProps) {
           </Tooltip>
         </TooltipProvider>
 
-        <DropdownMenuContent className="w-56" dir="rtl" align="end">
+        <DropdownMenuContent className="w-56" align="end">
           <DropdownMenuItem onSelect={() => setIsDetailOpen(true)}>
             <Edit2 className="ml-2 h-4 w-4" />
             <span>تعديل التفاصيل</span>
@@ -180,11 +187,17 @@ export function DayCell({ day, currentDate, isHighlighted }: DayCellProps) {
             </DropdownMenuPortal>
           </DropdownMenuSub>
 
-          {dayData && (dayData.note || dayData.pinned || dayData.title) && <DropdownMenuSeparator />}
-          {dayData && (dayData.note || dayData.pinned || dayData.title) &&
+          {dayData && (dayData.note || dayData.pinned || dayData.title || dayData.event || dayData.holidayInfo) && <DropdownMenuSeparator />}
+          {dayData && (dayData.holidayInfo || dayData.event) && (
+            <DropdownMenuItem onSelect={handleDeleteHoliday} className="text-destructive">
+              <CalendarDays className="ml-2 h-4 w-4" />
+              <span>مسح الإجازة الرسمية</span>
+            </DropdownMenuItem>
+          )}
+          {dayData && (dayData.note || dayData.pinned || dayData.title || dayData.event) &&
             <DropdownMenuItem onSelect={handleClearData} className="text-destructive">
               <Trash2 className="ml-2 h-4 w-4" />
-              <span>مسح البيانات (عنوان وملاحظة ودبوس)</span>
+              <span>مسح كل البيانات (ملاحظة، مناسبة، دبوس)</span>
             </DropdownMenuItem>
           }
         </DropdownMenuContent>
@@ -196,6 +209,7 @@ export function DayCell({ day, currentDate, isHighlighted }: DayCellProps) {
         day={day}
         dayData={dayData}
         onSave={handleSaveDetails}
+        onDeleteHoliday={dayData?.holidayInfo || dayData?.event ? handleDeleteHoliday : undefined}
       />
     </>
   );

@@ -129,7 +129,7 @@ export function CalendarMonth({ month, currentDate, activeSchedule, monthKey, is
         style={cardStyle}
         className={cn(
           "flex flex-col transition-all duration-300",
-          isCurrentMonth && "ring-2 ring-primary shadow-lg shadow-primary/20",
+          isCurrentMonth && "border-primary/50",
           isHighlighted && "animate-flash border-2 border-transparent"
         )}>
         <CardHeader className="relative pb-2">
@@ -209,9 +209,12 @@ export function CalendarMonth({ month, currentDate, activeSchedule, monthKey, is
           </div>
         </CardContent>
         {Object.keys(summary).length > 0 && (
-          <CardFooter className="justify-center gap-x-3 gap-y-1 flex-wrap border-t p-3 pt-2 text-sm text-muted-foreground">
+          <CardFooter className="justify-center gap-x-3 gap-y-1 flex-wrap border-t p-3 pt-2 text-sm">
               {Object.values(summary).map(item => (
-                 <div key={item.id}>{item.name}: <span className="font-semibold" style={{ color: item.color }}>{item.count}</span></div>
+                 <div key={item.id} className="flex items-center gap-2 border rounded-md px-2 py-1 text-foreground" style={{ borderColor: item.color }}>
+                    <span>{item.name}:</span>
+                    <span className="font-semibold" style={{ color: item.color }}>{item.count}</span>
+                 </div>
               ))}
           </CardFooter>
         )}

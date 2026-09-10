@@ -41,3 +41,5 @@ next-env.d.ts
 .genkit/cache
 .genkit/log
 .genkit/state
+
+.vercel

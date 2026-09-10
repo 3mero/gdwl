@@ -55,12 +55,12 @@ export const defaultViewSettings: ViewSettings = {
       monthNameBackground: 'hsl(var(--accent) / 0.5)',
       monthNumber: 'hsl(var(--muted-foreground))',
     },
-    tickerSpeed: 8,
+    tickerSpeed: 13,
     showTicker: true,
     colorPresets: [],
     customHolidayCalendars: {},
     lastHolidaySource: null,
-    lastHolidayCountry: null,
+    lastHolidayCountry: 'om',
     customHolidayNames: {},
     hiddenHolidays: [],
     holidayTranslations: {},
@@ -95,6 +95,8 @@ export function ViewSettingsProvider({ children }: { children: ReactNode }) {
 
   const viewSettings = useMemo(() => {
     const merged = mergeDeep(defaultViewSettings, storedSettings);
+    // Lock country exclusively to Sultanate of Oman
+    merged.lastHolidayCountry = 'om';
     // Auto-upgrade existing 3 columns preference to 4 columns
     if (merged.gridCols === 3) {
       merged.gridCols = 4;

@@ -12,6 +12,11 @@ export function PWARegistrar() {
     ) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
+          .then((registration) => {
+            if (registration) {
+              registration.update().catch(() => {});
+            }
+          })
           .catch((err) => {
              console.warn('Service Worker registration skipped or failed:', err);
           });

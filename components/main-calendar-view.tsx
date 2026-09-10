@@ -49,22 +49,17 @@ export function MainCalendarView() {
         if (activeSchedule?.startDate) {
             const today = startOfToday();
             setViewDate(today);
-            setIsFullYearView(false);
-            setShouldScroll(false); // DO NOT trigger scroll on load to avoid jarring jumps
+            setIsFullYearView(false); 
+            setShouldScroll(false);
         }
-    }, [activeSchedule?.id, activeSchedule?.startDate]);
+    }, [activeSchedule?.id, activeSchedule?.startDate]); 
 
     React.useEffect(() => {
-        if (shouldScroll) {
-            // Give React time to render the months before scrolling
-            const timer = setTimeout(() => {
-                if (startMonthRef.current) {
-                    startMonthRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-                setShouldScroll(false);
-            }, 150);
-            return () => clearTimeout(timer);
+        if (startMonthRef.current && !isFullYearView && shouldScroll) {
+            startMonthRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+        // This effect should NOT run on initial load, only when viewDate/isFullYearView changes later.
+        // `shouldScroll` acts as a flag to enable scrolling only after the initial setup.
     }, [viewDate, isFullYearView, shouldScroll]);
   
     React.useEffect(() => {
@@ -78,10 +73,8 @@ export function MainCalendarView() {
         }
     }, [highlightedItem]);
   
-    const generatedYearsRef = React.useRef<Set<string>>(new Set());
-
     const generateMissingDays = React.useCallback((schedule: Schedule, year: number) => {
-        const { startDate, dayTypes } = schedule;
+        const { startDate, days, dayTypes } = schedule;
         if (!startDate || !dayTypes || dayTypes.length === 0) return;
     
         const baseDate = new Date(startDate);
@@ -94,40 +87,30 @@ export function MainCalendarView() {
         const yearEnd = new Date(year, 11, 31);
         const daysInYear = differenceInDays(yearEnd, yearStart) + 1;
 
-        // Pre-compute all day assignments for this year
-        const generatedEntries: { dateKey: string; typeId: string }[] = [];
-        for (let i = 0; i < daysInYear; i++) {
-            const currentDay = addDays(yearStart, i);
-            const dateKey = formatDateKey(currentDay);
-            const daysDiff = differenceInDays(currentDay, baseDate);
-            const dayInCycle = (daysDiff % cycleLength + cycleLength) % cycleLength;
-            
-            let typeId: string | undefined = undefined;
-            let counter = 0;
-            for (const dayType of cycleDefinition) {
-                if (dayInCycle >= counter && dayInCycle < counter + dayType.days) {
-                    typeId = dayType.id;
-                    break;
-                }
-                counter += dayType.days;
-            }
-            if (typeId) {
-                generatedEntries.push({ dateKey, typeId });
-            }
-        }
-
-        // Use functional update so we always operate on the latest saved state
-        // This prevents race conditions where a snapshot could overwrite concurrent saves
         updateSchedule(schedule.id, (prevSchedule) => {
             const newDays = { ...prevSchedule.days };
             let changed = false;
-            for (const { dateKey, typeId } of generatedEntries) {
+            for (let i = 0; i < daysInYear; i++) {
+                const currentDate = addDays(yearStart, i);
+                const dateKey = formatDateKey(currentDate);
+        
                 if (!newDays[dateKey]?.typeId) {
+                    const daysDiff = differenceInDays(currentDate, baseDate);
+                    let dayInCycle = (daysDiff % cycleLength + cycleLength) % cycleLength;
+                    
+                    let typeId: string | undefined = undefined;
+                    let counter = 0;
+                    for (const dayType of cycleDefinition) {
+                        if (dayInCycle >= counter && dayInCycle < counter + dayType.days) {
+                            typeId = dayType.id;
+                            break;
+                        }
+                        counter += dayType.days;
+                    }
                     newDays[dateKey] = { ...newDays[dateKey], typeId };
                     changed = true;
                 }
             }
-            // Return same reference if nothing changed to avoid unnecessary saves
             return changed ? { days: newDays } : {};
         });
     }, [updateSchedule]);
@@ -136,10 +119,6 @@ export function MainCalendarView() {
         if (!activeSchedule) return;
         
         const yearInView = getYear(viewDate);
-        const yearKey = `${activeSchedule.id}-${yearInView}`;
-        
-        if (generatedYearsRef.current.has(yearKey)) return;
-
         const firstMonthInView = new Date(yearInView, isFullYearView ? 0 : getMonth(viewDate), 1);
         const daysInFirstMonth = 31;
         let needsGeneration = false;
@@ -154,11 +133,7 @@ export function MainCalendarView() {
         }
 
         if (needsGeneration) {
-            generatedYearsRef.current.add(yearKey);
             generateMissingDays(activeSchedule, yearInView);
-        } else {
-            // Already has data, mark as done so we don't check again
-            generatedYearsRef.current.add(yearKey);
         }
 
     }, [viewDate, isFullYearView, activeSchedule, generateMissingDays]);
@@ -180,7 +155,7 @@ export function MainCalendarView() {
     const handleReturnToCurrent = () => {
         setViewDate(scheduleInitialDate);
         setIsFullYearView(false);
-        setShouldScroll(true); // ✅ Enable scrolling on return to smoothly jump to current month
+        setShouldScroll(false); // Disable scrolling on return
     };
   
     const handleYearSelect = (yearStr: string) => {
@@ -202,9 +177,9 @@ export function MainCalendarView() {
     };
 
     const gridClasses: { [key: number]: string } = {
-        2: 'md:grid-cols-2',
+        2: 'md:grid-cols-2 lg:grid-cols-2',
         3: 'md:grid-cols-2 lg:grid-cols-3',
-        4: 'md:grid-cols-4 lg:grid-cols-4',
+        4: 'md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4',
     };
 
     if (!activeSchedule) {
@@ -242,9 +217,7 @@ export function MainCalendarView() {
                     style={{ transform: `scale(${zoomLevel})`}}
                 >
                     {months.map((month) => {
-                        // The "start month" ref is attached to the current month card so scroll targets it
-                        const isStartMonth = getMonth(month) === getMonth(scheduleInitialDate) 
-                            && getYear(month) === getYear(scheduleInitialDate);
+                        const isStartMonth = !isFullYearView && isSameYear(month, viewDate) && getMonth(month) === getMonth(viewDate);
                         const monthKey = format(month, 'yyyy-MM');
                         return (
                             <div id={`month-${monthKey}`} key={month.toISOString()} ref={isStartMonth ? startMonthRef : null}>

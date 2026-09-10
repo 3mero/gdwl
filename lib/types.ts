@@ -1,6 +1,8 @@
 
 
 
+
+
 export type DayUnderlyingType = 'work' | 'holiday';
 
 export interface DayTypeDefinition {
@@ -11,11 +13,20 @@ export interface DayTypeDefinition {
   color: string;
 }
 
+export interface HolidayInfo {
+  title: string;
+  note?: string;
+  countryCode?: string;
+}
+
 export interface DayData {
   title?: string;
   note?: string;
   pinned?: boolean;
   typeId?: string; // References DayTypeDefinition.id
+  type?: DayUnderlyingType; // Optional direct type
+  event?: string;
+  holidayInfo?: HolidayInfo;
 }
 
 export interface Schedule {
@@ -59,7 +70,7 @@ export interface ViewSettings {
     customHolidayNames: Record<string, string>;
     hiddenHolidays: string[];
     holidayTranslations: Record<string, string>;
-    hasSeenRotationTip?: boolean;
+    hasSeenRotationTip: boolean;
 }
 
 export interface FullExport {
@@ -79,3 +90,29 @@ export interface HolidayEvent {
   originalSummary: string;
   description: string;
 }
+
+export type GoogleSyncStatus = 'unauthenticated' | 'syncing' | 'synced' | 'error' | 'offline';
+
+export interface GoogleUser {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+  customAvatar?: string;
+}
+
+export interface GoogleSyncState {
+  user: GoogleUser | null;
+  status: GoogleSyncStatus;
+  lastSynced: string | null;
+  error: string | null;
+  autoSync: boolean;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  totalSyncs: number;
+  lastSyncAt: string | null;
+  activeToday: number;
+}
+

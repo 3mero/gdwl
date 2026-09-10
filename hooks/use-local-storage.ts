@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
-type SetValue<T> = (value: T | ((prev: T) => T)) => void;
-
-export function useLocalStorage<T>(key: string, initialValue: T): [T, SetValue<T>] {
+export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void] {
   const [storedValue, setStoredValue] = useState<T>(() => {
     if (typeof window === 'undefined') {
       return initialValue;
@@ -13,7 +11,7 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, SetValue<T
       const item = window.localStorage.getItem(key);
       return item ? JSON.parse(item) : initialValue;
     } catch (error) {
-      console.error(`useLocalStorage: error reading key "${key}"`, error);
+      console.error(error);
       return initialValue;
     }
   });
@@ -25,16 +23,20 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, SetValue<T
         window.localStorage.setItem(key, valueToStore);
       }
     } catch (error) {
-      console.error(`useLocalStorage: error writing key "${key}"`, error);
+      console.error(error);
     }
   }, [key, storedValue]);
 
-  const setValue: SetValue<T> = useCallback((value) => {
-    setStoredValue(prev => {
-      const newValue = typeof value === 'function' ? (value as (prev: T) => T)(prev) : value;
-      return newValue;
-    });
-  }, []);
-
-  return [storedValue, setValue];
+  const setValue = (value: T | ((val: T) => T)) => {
+    try {
+      setStoredValue((prevValue) => {
+        const valueToStore = value instanceof Function ? value(prevValue) : value;
+        return valueToStore;
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+  
+  return [storedValue, setValue] as const;
 }

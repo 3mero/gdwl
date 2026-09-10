@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "project_name": "جداول العمل (Shift Planner & Holiday Manager)",
+  "version": "0.2.0-dev",
+  "description": "تطبيق ويب متقدم (PWA) لتنظيم وإدارة جداول نوبات العمل مع مزامنة سحابية خاصة عبر Google Drive ودعم العمل بدون إنترنت.",
+  "tech_stack": {
+    "framework": "Next.js 15.3.6 (App Router)",
+    "ui_library": "React 18 + Tailwind CSS + Radix UI / Shadcn UI",
+    "icons": "Lucide React",
+    "language": "TypeScript 5.9",
+    "state_management": "React Context + LocalStorage Hooks",
+    "pwa": "@ducanh2912/next-pwa",
+    "date_utility": "date-fns",
+    "ical_parser": "ical.js",
+    "export_tools": "html2canvas",
+    "cloud_sync": "Google Drive AppData API (OAuth 2.0 / GIS)",
+    "analytics_counter": "Internal Anonymous API Ping + Admin Dev Page"
+  },
+  "directory_structure": {
+    "src/app": {
+      "page.tsx": "الصفحة الرئيسية وتتضمن التقويم، شريط الأخبار، زر المزامنة مع Google Drive",
+      "overview/page.tsx": "صفحة العرض الشامل للأحداث السنوية وإدارة مساحة التخزين LocalStorage",
+      "dev33.o/page.tsx": "[حماية خارقة] لوحة تحكم الأدمن السرية للغاية المحمية بـ PIN تمويهي 10h وصلاحيات الحساب",
+      "api/proxy/route.ts": "خادم وساطة لجلب تقاويم iCal وتجاوز CORS",
+      "api/stats/ping/route.ts": "[جديد] نقطة نهاية آمنة لزيادة عداد المستخدمين المجهول بشكل آمن دون حفظ بياناتهم",
+      "layout.tsx": "التخطيط الرئيسي مع إعدادات الخطوط والـ PWARegistrar والمزودات",
+      "globals.css": "أنماط CSS العالمية ومتغيرات الثيمات"
+    },
+    "src/components": {
+      "app-header.tsx": "شريط الهيدر العلوي ومؤشر حالة المزامنة مع Google Drive",
+      "google-sync-button.tsx": "[جديد] زر تسجيل الدخول وبدء/إيقاف المزامنة السحابية",
+      "main-calendar-view.tsx": "عرض التقويم الأساسي وتوزيع الأشهر والأيام",
+      "calendar-month.tsx": "مكون الشهر الفردي وعرض شبكة الأيام",
+      "day-cell.tsx": "مكون اليوم الفردي الملون وتفاصيل العمل/الإجازة والملاحظات",
+      "initial-setup.tsx": "معالج إعداد الجدول الأول للمستخدمين الجدد",
+      "schedule-manager.tsx": "إدارة الجداول المتعددة، المزامنة، وتخصيص الألوان والتصدير",
+      "official-holidays-dialog.tsx": "نافذة جلب وتصفية العطلات الرسمية عبر Google / OfficeHolidays",
+      "day-detail-dialog.tsx": "نافذة إضافة وتعديل ملاحظات وتثبيت يوم معين",
+      "event-detail-dialog.tsx": "نافذة استعراض الأحداث من شريط الأخبار وتحديد موقعها",
+      "news-ticker.tsx": "شريط الأخبار المتحرك السفلي/العلوي للأحداث القادمة",
+      "PWARegistrar.tsx": "مكون تسجيل الـ Service Worker بشكل آمن",
+      "providers.tsx": "مغلف المزودات (SchedulesProvider, ViewSettingsProvider, GoogleAuthProvider)",
+      "theme-toggle.tsx": "زر التبديل بين الوضع المظلم والمضيء"
+    },
+    "src/hooks": {
+      "use-google-sync.tsx": "[جديد] سياق وخطاف المزامنة التلقائية والرفع/الجلب من Google Drive AppData",
+      "use-schedules.tsx": "سياق إدارة الجداول وتحديث الأيام ودورة العمل",
+      "use-view-settings.tsx": "سياق إعدادات العرض ومزامنة خيارات التخصيص",
+      "use-local-storage.ts": "خطاف التخزين المحلي الآمن مع تجنب مشاكل SSR Hydration",
+      "use-highlight.tsx": "خطاف تمييز الأيام والأشهر المحسنة تظليلها",
+      "use-theme.tsx": "خطاف التحكم بالثيم",
+      "use-toast.ts": "خطاف الإشعارات المنبثقة"
+    },
+    "src/lib": {
+      "google-drive.ts": "[جديد] أدوات التعامل المباشر مع Google Drive AppData API (رفع، جلب، بحث عن ملفات)",
+      "types.ts": "تعريفات الأنواع الأساسية (Schedule, DayData, ViewSettings, GoogleSyncState)",
+      "utils.ts": "أدوات مساعدة وتنسيق التواريخ وإنشاء UUID",
+      "ticker-utils.tsx": "منطق حساب وتوليد عناصر شريط الأخبار",
+      "constants.ts": "الثوابت العامة ومعرف العميل OAuth"
+    }
+  },
+  "core_features": [
+    "منشئ نوبات العمل الدوري (مثال: يوم عمل / 3 أيام إجازة)",
+    "عرض شبكي تفاعلي مخصص (التحكم بالأعمدة من 1 إلى 6 ومستوى التكبير)",
+    "مزامنة سحابية فائقة الأمان والخصوصية مع Google Drive (AppData Folder)",
+    "لوحة تطوير خفية (/dev) لاستعراض عدد المستخدمين النشطين دون تتبع خصوصيتهم",
+    "نظام ثيمات وألوان مخصصة مع حفظ واستعادة الإعدادات المسبقة (Presets)",
+    "جلب العطلات الرسمية للدول العربية عبر خادم Proxy يدمج تقاويم iCal",
+    "تثبيت الأيام وإضافة ملاحظات وعناوين مخصصة مع شريط أخبار متحرك (News Ticker)",
+    "تصدير التقويم كصورة فائقة الدقة (PNG) أو ملف بيانات كامل (JSON)",
+    "صفحة عرض شامل مخصصة للتحليل السنوي وإدارة البيانات وحساب المساحة",
+    "دعم PWA الكامل للعمل كـ تطبيق مستقل بدون إنترنت"
+  ],
+  "active_sprint": {
+    "goal": "دمج المزامنة السحابية الخاصة عبر Google Drive AppData وإنشاء صفحة /dev للإحصائيات",
+    "tasks": [
+      "إعداد إعدادات Google Cloud OAuth 2.0 وتجهيز متغيرات البيئة (.env)",
+      "بناء مكتبة google-drive.ts للتواصل مع AppData Folder",
+      "إنشاء use-google-sync.tsx لربط حالة المزامنة مع useSchedules و LocalStorage",
+      "إضافة زر حالة المزامنة وتأكيد الدخول في AppHeader و ScheduleManager",
+      "إنشاء نقطة نهاية /api/stats/ping وعدّاد المستخدمين المجهول",
+      "إنشاء صفحة /dev المحمية بحساب أدمن المطور"
+    ]
+  },
+  "last_updated": "2026-08-11"
+}

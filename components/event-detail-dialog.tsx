@@ -138,7 +138,7 @@ export function EventDetailDialog({
             <div className='bg-accent/50 p-3 rounded-md'>
                 <h3 className="font-bold text-lg text-primary flex items-center gap-2">
                     <Quote className="h-5 w-5" />
-                    {event.data.title}
+                    {event.data?.title}
                 </h3>
             </div>
         )}
@@ -148,7 +148,7 @@ export function EventDetailDialog({
                 <span className="font-bold text-blue-400 flex items-center gap-1">
                     <MessageSquare className="h-4 w-4" /> الوصف:
                 </span>
-                <p className="mr-5 text-yellow-400 whitespace-pre-wrap">{event.data.note}</p>
+                <p className="mr-5 text-yellow-400 whitespace-pre-wrap">{event.data?.note}</p>
             </div>
         )}
 

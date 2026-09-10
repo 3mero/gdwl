@@ -8,6 +8,8 @@ import { uuidv4, formatDateKey } from '@/lib/utils';
 import { useViewSettings } from './use-view-settings';
 import { format, getYear } from 'date-fns';
 
+import { isOmanOfficialHoliday } from '@/lib/holiday-translator';
+
 interface SchedulesContextType {
   schedules: Schedule[];
   setSchedules: (schedules: Schedule[]) => void,
@@ -24,6 +26,7 @@ interface SchedulesContextType {
   deleteYearData: (year: string) => void;
   deleteAllEvents: () => void;
   deleteAllData: () => void;
+  purgeInvalidHolidays: () => number;
 }
 
 const SchedulesContext = createContext<SchedulesContextType | undefined>(undefined);
@@ -32,6 +35,74 @@ const defaultDayTypes: DayTypeDefinition[] = [
     { id: uuidv4(), name: 'عمل', type: 'work', days: 1, color: '#10B981' },
     { id: uuidv4(), name: 'إجازة', type: 'holiday', days: 3, color: '#FFFFFF' }
 ];
+
+const CURRENT_HOLIDAY_MIGRATION_KEY = 'gdwl_oman_holidays_sync_version';
+const CURRENT_HOLIDAY_VERSION = 'v2026.3';
+
+function checkAndPurgeSchedules(schedulesList: Schedule[]): { cleaned: Schedule[]; count: number } {
+  let count = 0;
+  const cleaned = schedulesList.map((s) => {
+    let scheduleModified = false;
+    const newDays = { ...s.days };
+    for (const dateKey in newDays) {
+      const day = newDays[dateKey];
+      if (day) {
+        const hTitle = day.holidayInfo?.title || '';
+        const hNote = day.holidayInfo?.note || '';
+        const ev = day.event || '';
+
+        const hasDisallowedWord =
+          hTitle.includes('الميلادية') ||
+          hTitle.includes('الميلادي') ||
+          hTitle.includes('New Year') ||
+          hTitle.includes('Public Holiday') ||
+          hTitle.includes('نهضة') ||
+          hTitle.includes('النهضة') ||
+          hTitle.includes('renaissance') ||
+          hNote.includes('الميلادية') ||
+          hNote.includes('الميلادي') ||
+          hNote.includes('نهضة') ||
+          hNote.includes('النهضة') ||
+          hNote.includes('renaissance') ||
+          ev.includes('الميلادية') ||
+          ev.includes('الميلادي') ||
+          ev.includes('New Year') ||
+          ev.includes('Public Holiday') ||
+          ev.includes('نهضة') ||
+          ev.includes('renaissance');
+
+        const isUnverifiedHoliday = Boolean(day.holidayInfo && !isOmanOfficialHoliday(hTitle));
+
+        if (hasDisallowedWord || isUnverifiedHoliday) {
+          scheduleModified = true;
+          count++;
+          const { holidayInfo, ...rest } = day;
+          if (
+            rest.event &&
+            (rest.event.includes('الميلادية') ||
+              rest.event.includes('الميلادي') ||
+              rest.event.includes('New Year') ||
+              rest.event.includes('Public Holiday') ||
+              rest.event.includes('نهضة') ||
+              rest.event.includes('renaissance'))
+          ) {
+            delete rest.event;
+          }
+          if (!rest.typeId && !rest.title && !rest.note && !rest.pinned && !rest.event) {
+            delete newDays[dateKey];
+          } else {
+            newDays[dateKey] = rest;
+          }
+        }
+      }
+    }
+    if (scheduleModified) {
+      return { ...s, days: newDays };
+    }
+    return s;
+  });
+  return { cleaned, count };
+}
 
 export function SchedulesProvider({ children }: { children: ReactNode }) {
   const [schedules, setSchedules] = useLocalStorage<Schedule[]>('schedules', []);
@@ -48,15 +119,27 @@ export function SchedulesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // This effect runs only on the client after the initial load.
     if (isLoaded) {
-        if (schedules.length > 0 && (!activeScheduleId || !schedules.some(s => s.id === activeScheduleId))) {
-          // If activeScheduleId is invalid or not in the list, set it to the first schedule.
-          setActiveScheduleId(schedules[0].id);
-        } else if (schedules.length === 0) {
-          // If there are no schedules, clear the active ID.
-          setActiveScheduleId(null);
+      // Auto-purge any invalid or outdated non-Oman holidays from all schedules
+      const storedVersion = typeof window !== 'undefined' ? localStorage.getItem(CURRENT_HOLIDAY_MIGRATION_KEY) : null;
+      if (storedVersion !== CURRENT_HOLIDAY_VERSION) {
+        const { cleaned, count } = checkAndPurgeSchedules(schedules);
+        if (count > 0) {
+          setSchedules(cleaned);
         }
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(CURRENT_HOLIDAY_MIGRATION_KEY, CURRENT_HOLIDAY_VERSION);
+        }
+      }
+
+      if (schedules.length > 0 && (!activeScheduleId || !schedules.some(s => s.id === activeScheduleId))) {
+        // If activeScheduleId is invalid or not in the list, set it to the first schedule.
+        setActiveScheduleId(schedules[0].id);
+      } else if (schedules.length === 0) {
+        // If there are no schedules, clear the active ID.
+        setActiveScheduleId(null);
+      }
     }
-  }, [isLoaded, schedules, activeScheduleId, setActiveScheduleId]);
+  }, [isLoaded]);
 
 
   const addSchedule = useCallback((
@@ -235,6 +318,17 @@ export function SchedulesProvider({ children }: { children: ReactNode }) {
   }, []);
 
 
+  const purgeInvalidHolidays = useCallback(() => {
+    const { cleaned, count } = checkAndPurgeSchedules(schedules);
+    if (count > 0) {
+      setSchedules(cleaned);
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CURRENT_HOLIDAY_MIGRATION_KEY, CURRENT_HOLIDAY_VERSION);
+    }
+    return count;
+  }, [schedules, setSchedules]);
+
   const activeSchedule = isLoaded ? (schedules.find(s => s.id === activeScheduleId) || null) : null;
 
   const value = { 
@@ -253,6 +347,7 @@ export function SchedulesProvider({ children }: { children: ReactNode }) {
     deleteYearData,
     deleteAllEvents,
     deleteAllData,
+    purgeInvalidHolidays,
   };
 
   return (

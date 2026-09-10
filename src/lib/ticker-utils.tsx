@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -17,8 +16,18 @@ export const generateTickerItems = (schedule: Schedule | null, today: Date): Tic
     const todayKey = format(todayStart, 'yyyy-MM-dd');
     
     const sortedDays = Object.keys(schedule.days).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+    const getDayType = (dayKey: string): 'work' | 'holiday' | undefined => {
+        const day = schedule.days[dayKey];
+        if (!day) return undefined;
+        if (day.type) return day.type;
+        if (day.typeId && schedule.dayTypes) {
+            return schedule.dayTypes.find(dt => dt.id === day.typeId)?.type;
+        }
+        return undefined;
+    };
     
-    const isTodayWorkDay = schedule.days[todayKey]?.type === 'work';
+    const isTodayWorkDay = getDayType(todayKey) === 'work';
 
     // Find next holiday streak
     const findNextHolidayStreak = (startDate: Date): Date[] => {
@@ -27,7 +36,7 @@ export const generateTickerItems = (schedule: Schedule | null, today: Date): Tic
         let firstHolidayIndex = -1;
 
         for (let i = 0; i < futureDaysOnly.length; i++) {
-            if (schedule.days[futureDaysOnly[i]]?.type === 'holiday') {
+            if (getDayType(futureDaysOnly[i]) === 'holiday') {
                 firstHolidayIndex = i;
                 break;
             }
@@ -42,7 +51,7 @@ export const generateTickerItems = (schedule: Schedule | null, today: Date): Tic
                 const currentDate = parseISO(currentKey);
                 const prevDate = streak[streak.length - 1];
 
-                if (differenceInDays(currentDate, prevDate) === 1 && schedule.days[currentKey]?.type === 'holiday') {
+                if (differenceInDays(currentDate, prevDate) === 1 && getDayType(currentKey) === 'holiday') {
                     streak.push(currentDate);
                 } else {
                     break; 
@@ -85,7 +94,7 @@ export const generateTickerItems = (schedule: Schedule | null, today: Date): Tic
         // Find next work day if today is not a work day
         const futureWorkDays = sortedDays.filter(dayKey => {
             const dayDate = parseISO(dayKey);
-            return (isAfter(dayDate, todayStart)) && schedule.days[dayKey]?.type === 'work';
+            return (isAfter(dayDate, todayStart)) && getDayType(dayKey) === 'work';
         });
 
         if (futureWorkDays.length > 0) {

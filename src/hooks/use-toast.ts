@@ -10,7 +10,7 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 3
-const TOAST_LIFETIME = 5000; // 5 seconds
+const TOAST_LIFETIME = 2000; // 2 seconds
 
 type ToasterToast = ToastProps & {
   id: string

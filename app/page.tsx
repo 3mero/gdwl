@@ -16,7 +16,7 @@ import { OfficialHolidaysDialog } from '@/components/official-holidays-dialog';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { DayData } from '@/lib/types';
 import { formatDateKey } from '@/lib/utils';
-import { generateTickerItems } from '@/lib/ticker-utils.tsx';
+import { generateTickerItems } from '@/lib/ticker-utils';
 
 
 export default function Home() {
@@ -33,6 +33,7 @@ export default function Home() {
   
   const [currentDate, setCurrentDate] = React.useState(new Date());
   const [isManagerOpen, setIsManagerOpen] = React.useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = React.useState<'settings' | 'notifications'>('settings');
   const [isHolidaysOpen, setIsHolidaysOpen] = React.useState(false);
   
   const [installPrompt, setInstallPrompt] = React.useState<any>(null);
@@ -220,12 +221,15 @@ export default function Home() {
         }
       }
       
-      const newEvent = holiday.title + (holiday.note ? `\n${holiday.note}` : '');
+      const holidayTypeId = activeSchedule.dayTypes?.find(dt => dt.type === 'holiday')?.id;
 
       updates[holiday.date] = {
         ...existingData,
-        typeId,
-        event: existingData.event ? `${existingData.event}\n\n${newEvent}` : newEvent,
+        typeId: typeId || holidayTypeId,
+        holidayInfo: {
+          title: holiday.title,
+          note: holiday.note,
+        },
       };
     });
 
@@ -236,6 +240,33 @@ export default function Home() {
     toast({
       title: "تم إضافة المناسبات",
       description: `تم تحديث ${holidays.length} يومًا في جدولك.`,
+    });
+  };
+
+  const handleClearOfficialHolidays = () => {
+    if (!activeSchedule) return;
+    updateSchedule(activeSchedule.id, (prev) => {
+      const newDays = { ...prev.days };
+      Object.keys(newDays).forEach((dateKey) => {
+        const day = newDays[dateKey];
+        if (day && (day.holidayInfo || day.event)) {
+          const { holidayInfo, ...rest } = day;
+          if (rest.event && (rest.event.includes('إجازة') || rest.event.includes('عطلة') || rest.event.includes('عيد') || rest.event.includes('الوطني') || rest.event.includes('Holiday') || rest.event.includes('National'))) {
+            delete rest.event;
+          }
+          if (!rest.typeId && !rest.title && !rest.note && !rest.pinned && !rest.event) {
+            delete newDays[dateKey];
+          } else {
+            newDays[dateKey] = rest;
+          }
+        }
+      });
+      return { days: newDays };
+    });
+
+    toast({
+      title: "تم تنظيف الإجازات",
+      description: "تم مسح جميع الإجازات الرسمية من جدولك بنجاح.",
     });
   };
   
@@ -260,7 +291,7 @@ export default function Home() {
   }
 
   if (schedules.length === 0 || !activeSchedule?.startDate) {
-    return <InitialSetup />;
+    return <InitialSetup onFinished={() => {}} />;
   }
 
   return (
@@ -268,7 +299,10 @@ export default function Home() {
        <AppHeader 
         onCapture={performCapture}
         captureStatus={captureStatus}
-        onOpenSettings={() => setIsManagerOpen(true)}
+        onOpenSettings={(tab = 'settings') => {
+          setSettingsInitialTab(tab);
+          setIsManagerOpen(true);
+        }}
         onOpenHolidays={() => setIsHolidaysOpen(true)}
         installPrompt={installPrompt}
         isAppInstalled={isAppInstalled}
@@ -294,7 +328,10 @@ export default function Home() {
       </main>
        <ScheduleManager 
             open={isManagerOpen} 
-            onOpenChange={setIsManagerOpen}
+            onOpenChange={(open) => {
+              setIsManagerOpen(open);
+              if (!open) setSettingsInitialTab('settings');
+            }}
             onZoomIn={() => handleZoom('in')}
             onZoomOut={() => handleZoom('out')}
             onSetGridCols={setGridCols}
@@ -302,6 +339,8 @@ export default function Home() {
             installPrompt={installPrompt}
             isAppInstalled={isAppInstalled}
             onInstallClick={handleInstallClick}
+            initialTab={settingsInitialTab}
+            onOpenHolidays={() => setIsHolidaysOpen(true)}
         />
         {(selectedEventIndex !== null) && (
             <EventDetailDialog
@@ -319,6 +358,7 @@ export default function Home() {
             isOpen={isHolidaysOpen}
             onOpenChange={setIsHolidaysOpen}
             onAddHolidays={handleAddHolidays}
+            onClearHolidays={handleClearOfficialHolidays}
         />
     </div>
   );

@@ -24,7 +24,7 @@ interface NewsTickerProps {
   onItemClick: (item: TickerItemData) => void;
 }
 
-export function NewsTicker({ items, separator, duration = 8, onItemClick }: NewsTickerProps) {
+export function NewsTicker({ items, separator, duration = 13, onItemClick }: NewsTickerProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progress, setProgress] = useState(100);
   const [isPaused, setIsPaused] = useState(false);

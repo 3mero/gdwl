@@ -3,6 +3,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { translateHolidaySummary, isOmanOfficialHoliday } from '@/lib/holiday-translator';
 import ICAL from 'ical.js';
 import { format, parseISO, isSameMonth, isSameYear, startOfToday } from 'date-fns';
 import { arSA } from 'date-fns/locale';
@@ -39,6 +40,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { useViewSettings } from '@/hooks/use-view-settings';
+import { useSchedules } from '@/hooks/use-schedules';
 import { Input } from './ui/input';
 import { Card, CardDescription, CardHeader, CardTitle } from './ui/card';
 import type { CalendarSource, HolidayEvent } from '@/lib/types';
@@ -50,46 +52,13 @@ import { uuidv4 } from '@/lib/utils';
 // Use internal Next.js proxy route
 const INTERNAL_PROXY_URL = '/api/proxy?url=';
 
+// Official Holidays Calendars - Sultanate of Oman ONLY (سلطنة عُمان فقط)
 const GOOGLE_CALENDARS: Record<string, { name: string; url: string | null }> = {
     om: { name: 'سلطنة عُمان', url: 'https://calendar.google.com/calendar/ical/en.om%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    sa: { name: 'المملكة العربية السعودية', url: 'https://calendar.google.com/calendar/ical/en.sa%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    ae: { name: 'الإمارات العربية المتحدة', url: 'https://calendar.google.com/calendar/ical/en.ae%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    kw: { name: 'الكويت', url: 'https://calendar.google.com/calendar/ical/en.kw%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    qa: { name: 'قطر', url: 'https://calendar.google.com/calendar/ical/en.qa%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    bh: { name: 'البحرين', url: 'https://calendar.google.com/calendar/ical/en.bh%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    eg: { name: 'مصر', url: 'https://calendar.google.com/calendar/ical/en.eg%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    jo: { name: 'الأردن', url: 'https://calendar.google.com/calendar/ical/en.jo%23holiday%4@group.v.calendar.google.com/public/basic.ics' },
-    lb: { name: 'لبنان', url: 'https://calendar.google.com/calendar/ical/en.lb%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    sy: { name: 'سوريا', url: 'https://calendar.google.com/calendar/ical/en.sy%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    iq: { name: 'العراق', url: 'https://calendar.google.com/calendar/ical/en.iq%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    ye: { name: 'اليمن', url: 'https://calendar.google.com/calendar/ical/en.ye%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    ps: { name: 'فلسطين', url: 'https://www.officeholidays.com/ics/palestine' },
-    ma: { name: 'المغرب', url: 'https://calendar.google.com/calendar/ical/en.ma%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    dz: { name: 'الجزائر', url: 'https://calendar.google.com/calendar/ical/en.dz%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    tn: { name: 'تونس', url: 'https://calendar.google.com/calendar/ical/en.tn%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    ly: { name: 'ليبيا', url: 'https://calendar.google.com/calendar/ical/en.ly%23holiday%40group.v.calendar.google.com/public/basic.ics' },
-    sd: { name: 'السودان', url: 'https://calendar.google.com/calendar/ical/en.sd%23holiday%40group.v.calendar.google.com/public/basic.ics' },
 };
 
 const OFFICE_HOLIDAYS: Record<string, { name: string; url: string | null }> = {
     om: { name: 'سلطنة عُمان', url: 'https://www.officeholidays.com/ics/oman' },
-    sa: { name: 'المملكة العربية السعودية', url: 'https://www.officeholidays.com/ics/saudi-arabia' },
-    ae: { name: 'الإمارات العربية المتحدة', url: 'https://www.officeholidays.com/ics/uae' },
-    kw: { name: 'الكويت', url: 'https://www.officeholidays.com/ics/kuwait' },
-    qa: { name: 'قطر', url: 'https://www.officeholidays.com/ics/qatar' },
-    bh: { name: 'البحرين', url: 'https://www.officeholidays.com/ics/bahrain' },
-    eg: { name: 'مصر', url: 'https://www.officeholidays.com/ics/egypt' },
-    jo: { name: 'الأردن', url: 'https://www.officeholidays.com/ics/jordan' },
-    lb: { name: 'لبنان', url: 'https://www.officeholidays.com/ics/lebanon' },
-    sy: { name: 'سوريا', url: 'https://www.officeholidays.com/ics/syria' },
-    iq: { name: 'العراق', url: 'https://www.officeholidays.com/ics/iraq' },
-    ye: { name: 'اليمن', url: 'https://www.officeholidays.com/ics/yemen' },
-    ps: { name: 'فلسطين', url: 'https://www.officeholidays.com/ics/palestine' },
-    ma: { name: 'المغرب', url: 'https://www.officeholidays.com/ics/morocco' },
-    dz: { name: 'الجزائر', url: 'https://www.officeholidays.com/ics/algeria' },
-    tn: { name: 'تونس', url: 'https://www.officeholidays.com/ics/tunisia' },
-    ly: { name: 'ليبيا', url: 'https://www.officeholidays.com/ics/libya' },
-    sd: { name: 'السودان', url: 'https://www.officeholidays.com/ics/sudan' },
 };
 
 const COUNTRIES = GOOGLE_CALENDARS;
@@ -194,12 +163,14 @@ interface OfficialHolidaysDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onAddHolidays: (holidays: { date: string; title: string; note: string }[]) => void;
+  onClearHolidays?: () => void;
 }
 
 export function OfficialHolidaysDialog({
   isOpen,
   onOpenChange,
   onAddHolidays,
+  onClearHolidays,
 }: OfficialHolidaysDialogProps) {
   const [holidays, setHolidays] = useState<HolidayEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -208,7 +179,6 @@ export function OfficialHolidaysDialog({
   const [editingHolidayKey, setEditingHolidayKey] = useState<string | null>(null);
   const [editingHolidayName, setEditingHolidayName] = useState('');
   const [filter, setFilter] = useState<'all' | 'month' | 'year'>('all');
-
 
   const {
     customHolidayCalendars,
@@ -230,10 +200,29 @@ export function OfficialHolidaysDialog({
     if (customHolidayNames[key]) {
       return customHolidayNames[key];
     }
-    return holiday.originalSummary;
+    // Auto-translate English holidays to Arabic if unmapped
+    const translated = translateHolidaySummary(holiday.originalSummary);
+    return translated.title;
   }, [activeSource, selectedCountry, customHolidayNames]);
 
   
+  const { purgeInvalidHolidays } = useSchedules();
+
+  const handleSyncAndRefresh = async () => {
+    try {
+      const cleanedCount = purgeInvalidHolidays();
+      await fetchHolidays(activeSource, selectedCountry || 'om');
+      toast({
+        title: "تم تحديث ومزامنة الإجازات الرسمية",
+        description: cleanedCount > 0
+          ? `تم تنظيف ${cleanedCount} من الإدخالات القديمة وتحديث تقويم سلطنة عُمان بنجاح.`
+          : "تم تحديث ومزامنة إجازات سلطنة عُمان بالوضع المستقر الجديد.",
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const fetchHolidays = useCallback(async (source: CalendarSource, countryCode: string) => {
     setLoading(true);
     setError(null);
@@ -260,8 +249,8 @@ export function OfficialHolidaysDialog({
     }
 
     try {
-      const url = `${INTERNAL_PROXY_URL}${encodeURIComponent(calendarUrl)}`;
-      const response = await fetch(url);
+      const url = `${INTERNAL_PROXY_URL}${encodeURIComponent(calendarUrl)}&_t=${Date.now()}`;
+      const response = await fetch(url, { cache: 'no-store' });
       
       if (!response.ok) throw new Error(`فشل جلب البيانات: ${response.statusText}`);
       
@@ -288,10 +277,14 @@ export function OfficialHolidaysDialog({
               if (isNaN(startDate.getTime())) return null;
 
               if (startDate.getFullYear() >= today.getFullYear()) { 
+                  const summary = event.summary || '';
+                  if (!isOmanOfficialHoliday(summary)) {
+                    return null; // Exclude non-official or foreign entries
+                  }
                   return {
                     uid: event.uid || uuidv4(),
                     date: format(startDate, 'yyyy-MM-dd'),
-                    originalSummary: event.summary || 'مناسبة بدون عنوان',
+                    originalSummary: summary || 'إجازة رسمية',
                     description: event.description || ''
                   };
               }
@@ -303,11 +296,23 @@ export function OfficialHolidaysDialog({
         })
         .filter((event): event is HolidayEvent => event !== null);
       
-      parsedHolidays.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      // Deduplicate by date + translated title
+      const uniqueHolidays: HolidayEvent[] = [];
+      const seenDedupeKeys = new Set<string>();
+      parsedHolidays.forEach((h) => {
+        const trans = translateHolidaySummary(h.originalSummary);
+        const dedupeKey = `${h.date}_${trans.title}`;
+        if (!seenDedupeKeys.has(dedupeKey)) {
+          seenDedupeKeys.add(dedupeKey);
+          uniqueHolidays.push(h);
+        }
+      });
+
+      uniqueHolidays.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       
-      setHolidays(parsedHolidays);
-      if (parsedHolidays.length === 0) {
-        setError(`لم يتم العثور على إجازات قادمة لـ ${COUNTRIES[countryCode]?.name}.`);
+      setHolidays(uniqueHolidays);
+      if (uniqueHolidays.length === 0) {
+        setError(`لم يتم العثور على إجازات قادمة لـ سلطنة عُمان.`);
       }
 
     } catch (err: any) {
@@ -391,7 +396,14 @@ export function OfficialHolidaysDialog({
   const handleAddSelected = () => {
     const holidaysToAdd = holidays
         .filter(h => selectedHolidays.has(getHolidayKey(h)))
-        .map(h => ({ date: h.date, title: getHolidayDisplayName(h), note: h.description }));
+        .map(h => {
+          const translated = translateHolidaySummary(h.originalSummary);
+          return {
+            date: h.date,
+            title: getHolidayDisplayName(h),
+            note: h.description || translated.note,
+          };
+        });
 
     if (holidaysToAdd.length > 0) {
       onAddHolidays(holidaysToAdd);
@@ -402,7 +414,14 @@ export function OfficialHolidaysDialog({
   };
   
   const handleAddAll = () => {
-    const holidaysToAdd = filteredHolidays.map(h => ({ date: h.date, title: getHolidayDisplayName(h), note: h.description }));
+    const holidaysToAdd = filteredHolidays.map(h => {
+      const translated = translateHolidaySummary(h.originalSummary);
+      return {
+        date: h.date,
+        title: getHolidayDisplayName(h),
+        note: h.description || translated.note,
+      };
+    });
     if (holidaysToAdd.length > 0) {
       onAddHolidays(holidaysToAdd);
       onOpenChange(false);
@@ -578,30 +597,37 @@ export function OfficialHolidaysDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md h-[80vh] flex flex-col" dir="rtl">
         <DialogHeader>
-          <DialogTitle>الإجازات الرسمية القادمة</DialogTitle>
+          <DialogTitle>الإجازات الرسمية القادمة (سلطنة عُمان)</DialogTitle>
           <DialogDescription>
-            اختر الدولة والمصدر لعرض الإجازات الرسمية وإضافتها إلى جدولك.
+            الإجازات الرسمية المعتمدة في سلطنة عُمان وفق المراسيم السلطانية. يمكنك اختيار المناسبات وإضافتها لجدولك.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Select value={selectedCountry} onValueChange={handleCountryChange}>
-                <SelectTrigger id="country-select" className="w-full">
-                    <SelectValue placeholder="اختر دولة..." />
-                </SelectTrigger>
-                <SelectContent>
-                    {Object.entries(COUNTRIES).map(([code, { name }]) => (
-                        <SelectItem key={code} value={code}>{name}</SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-md bg-primary/10 border border-primary/20 text-xs font-semibold text-primary">
+                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                  <Building className="h-4 w-4 shrink-0" />
+                  <span className="truncate">سلطنة عُمان</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSyncAndRefresh}
+                  disabled={loading}
+                  className="h-7 px-2 text-[11px] gap-1 hover:bg-primary/20 text-primary font-bold shrink-0"
+                  title="تحديث ومزامنة فورية"
+                >
+                  <RotateCw className={cn("h-3 w-3", loading && "animate-spin")} />
+                  <span>تحديث ومزامنة</span>
+                </Button>
+            </div>
 
              <Select value={activeSource} onValueChange={(val) => handleSourceChange(val as CalendarSource)}>
                 <SelectTrigger id="source-select" className="w-full">
                     <SelectValue placeholder="اختر مصدر..." />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="officeholidays">OfficeHolidays.com</SelectItem>
+                    <SelectItem value="officeholidays">OfficeHolidays.com (المصدر المعتمد لسلطنة عُمان)</SelectItem>
                     <SelectItem value="google">تقويم Google</SelectItem>
                     <SelectItem value="custom">رابط مخصص</SelectItem>
                 </SelectContent>
@@ -613,35 +639,61 @@ export function OfficialHolidaysDialog({
           {renderHolidayList()}
         </div>
 
-        {!loading && holidays.length > 0 &&(
-            <DialogFooter className="flex-col sm:flex-row sm:justify-between pt-4 border-t">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-              <div className="flex flex-col-reverse sm:flex-row gap-2">
-                {visibleHolidays.length > 0 && selectedHolidays.size > 0 && (
-                  <Button onClick={handleAddSelected}>
-                    إضافة المحدد ({selectedHolidays.size})
+        <DialogFooter className="flex-col sm:flex-row sm:justify-between pt-4 border-t gap-2">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>إغلاق</Button>
+            {onClearHolidays && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10">
+                    <Trash2 className="ml-1.5 h-4 w-4" />
+                    مسح الإجازات من الجدول
                   </Button>
-                )}
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button disabled={loading || visibleHolidays.length === 0}>إضافة الكل ({visibleHolidays.length})</Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent dir="rtl">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>هل أنت متأكد؟</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        سيتم إضافة جميع الإجازات المعروضة ({visibleHolidays.length}) إلى جدولك الحالي.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleAddAll}>تأكيد الإضافة</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </DialogFooter>
-        )}
+                </AlertDialogTrigger>
+                <AlertDialogContent dir="rtl">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>تنظيف ومسح الإجازات من الجدول</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      هل تريد مسح جميع الإجازات الرسمية المسجلة حالياً في جدولك؟ يفيد هذا الخيار في تنظيف أي إجازات قديمة أو غريبة أُضيفت مسبقاً. لن يؤثر ذلك على ملاحظاتك أو أوقات دوامك.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                    <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { onClearHolidays(); onOpenChange(false); }}>
+                      تأكيد المسح
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+          <div className="flex flex-col-reverse sm:flex-row gap-2">
+            {visibleHolidays.length > 0 && selectedHolidays.size > 0 && (
+              <Button onClick={handleAddSelected}>
+                إضافة المحدد ({selectedHolidays.size})
+              </Button>
+            )}
+            {visibleHolidays.length > 0 && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button disabled={loading || visibleHolidays.length === 0}>إضافة الكل ({visibleHolidays.length})</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent dir="rtl">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>هل أنت متأكد؟</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      سيتم إضافة جميع إجازات سلطنة عُمان المعروضة ({visibleHolidays.length}) إلى جدولك الحالي.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleAddAll}>تأكيد الإضافة</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
 

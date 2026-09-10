@@ -4,17 +4,20 @@ import { useEffect } from 'react';
 
 export function PWARegistrar() {
   useEffect(() => {
-    // التحقق الدقيق الحذر من دعم المتصفح لتجنب الخطأ
     if (
       typeof window !== 'undefined' &&
       'serviceWorker' in navigator &&
       navigator.serviceWorker !== null &&
-      typeof navigator.serviceWorker.register === 'function' // الفحص الأهم
+      typeof navigator.serviceWorker.register === 'function'
     ) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
+          .then((registration) => {
+            if (registration) {
+              registration.update().catch(() => {});
+            }
+          })
           .catch((err) => {
-             // إخفاء الخطأ برمجياً حتى لا يؤثر على تجربة المستخدم
              console.warn('Service Worker registration skipped or failed:', err);
           });
       });

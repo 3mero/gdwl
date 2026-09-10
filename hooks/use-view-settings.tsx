@@ -38,9 +38,8 @@ interface ViewSettingsContextType {
   removeHiddenHoliday: (key: string) => void;
   holidayTranslations: Record<string, string>;
   setHolidayTranslations: (translations: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
-  hasSeenRotationTip: boolean;
-  setHasSeenRotationTip: (seen: boolean) => void;
   resetViewSettings: () => void;
+  resetBackgroundColors: () => void;
 }
 
 const ViewSettingsContext = createContext<ViewSettingsContextType | undefined>(undefined);
@@ -56,12 +55,12 @@ export const defaultViewSettings: ViewSettings = {
       monthNameBackground: 'hsl(var(--accent) / 0.5)',
       monthNumber: 'hsl(var(--muted-foreground))',
     },
-    tickerSpeed: 8,
+    tickerSpeed: 13,
     showTicker: true,
     colorPresets: [],
     customHolidayCalendars: {},
     lastHolidaySource: null,
-    lastHolidayCountry: null,
+    lastHolidayCountry: 'om',
     customHolidayNames: {},
     hiddenHolidays: [],
     holidayTranslations: {},
@@ -96,6 +95,8 @@ export function ViewSettingsProvider({ children }: { children: ReactNode }) {
 
   const viewSettings = useMemo(() => {
     const merged = mergeDeep(defaultViewSettings, storedSettings);
+    // Lock country exclusively to Sultanate of Oman
+    merged.lastHolidayCountry = 'om';
     // Auto-upgrade existing 3 columns preference to 4 columns
     if (merged.gridCols === 3) {
       merged.gridCols = 4;
@@ -209,10 +210,10 @@ export function ViewSettingsProvider({ children }: { children: ReactNode }) {
     });
   }, [updateSettings]);
   
-  const setHasSeenRotationTip = useCallback((seen: boolean) => {
-    updateSettings(() => ({ hasSeenRotationTip: seen }));
-  }, [updateSettings]);
-
+  const resetBackgroundColors = useCallback(() => {
+    setBackgroundColors(defaultViewSettings.backgroundColors);
+  }, [setBackgroundColors]);
+  
   const resetViewSettings = useCallback(() => {
     setStoredSettings(defaultViewSettings);
   }, [setStoredSettings]);
@@ -248,9 +249,8 @@ export function ViewSettingsProvider({ children }: { children: ReactNode }) {
     removeHiddenHoliday,
     holidayTranslations: viewSettings.holidayTranslations,
     setHolidayTranslations,
-    hasSeenRotationTip: viewSettings.hasSeenRotationTip,
-    setHasSeenRotationTip,
     resetViewSettings,
+    resetBackgroundColors,
   };
 
   return (
