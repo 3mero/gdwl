@@ -10,7 +10,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Cloud, Check, Loader2, LogOut, Download, Upload, ShieldCheck, Sparkles, Image as ImageIcon, Bot, RefreshCw } from 'lucide-react';
+import { Cloud, Check, Loader2, LogOut, Download, Upload, ShieldCheck, Sparkles, Image as ImageIcon, Bot, RefreshCw, KeyRound } from 'lucide-react';
+import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { arSA } from 'date-fns/locale';
@@ -244,6 +245,33 @@ export function GoogleSyncButton() {
                   >
                     تجديد
                   </Button>
+                </div>
+              )}
+
+              {/* EXCLUSIVE DEVELOPER & OWNER DIRECT ACCESS (alomar3363@gmail.com only) */}
+              {user.email?.toLowerCase() === 'alomar3363@gmail.com' && (
+                <div className="p-3 bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/15 border-2 border-amber-500/40 rounded-xl space-y-2.5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-amber-500 font-bold text-xs">
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>رتبة المطور والمالك الحصري</span>
+                    </div>
+                    <span className="bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-mono px-2 py-0.5 rounded font-bold border border-amber-500/30">
+                      DEV33.O
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    مرحباً بك يا عمر. لديك صلاحية الولوج المباشر لصفحة الأدمن للتحكم بالأجهزة وتغيير الرمز السري بنفسك.
+                  </p>
+                  <Link href="/dev33.o">
+                    <Button
+                      size="sm"
+                      className="w-full gap-2 text-xs bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-700 hover:to-yellow-700 text-white font-bold shadow-md"
+                    >
+                      <KeyRound className="h-3.5 w-3.5" />
+                      دخول لوحة المطور (dev33.o) وإدارة الباسورد
+                    </Button>
+                  </Link>
                 </div>
               )}
 

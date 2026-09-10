@@ -104,6 +104,42 @@ function checkAndPurgeSchedules(schedulesList: Schedule[]): { cleaned: Schedule[
   return { cleaned, count };
 }
 
+function applyEmergencyHolidays(schedulesList: Schedule[], emergencyHolidays: any[]): { updated: Schedule[]; appliedCount: number } {
+  if (!emergencyHolidays || emergencyHolidays.length === 0) return { updated: schedulesList, appliedCount: 0 };
+  let appliedCount = 0;
+  const updated = schedulesList.map(s => {
+    let modified = false;
+    const newDays = { ...s.days };
+    for (const emg of emergencyHolidays) {
+      if (!emg.startDate) continue;
+      const start = new Date(emg.startDate);
+      const end = new Date(emg.endDate || emg.startDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) continue;
+
+      const curr = new Date(start);
+      while (curr <= end) {
+        const dateKey = curr.toISOString().split('T')[0];
+        const existingDay = newDays[dateKey] || {};
+        if (!existingDay.holidayInfo || existingDay.holidayInfo.title !== emg.title) {
+          newDays[dateKey] = {
+            ...existingDay,
+            holidayInfo: {
+              title: emg.title,
+              note: emg.note || 'إجازة رسمية استثنائية (أمر سلطاني / طوارئ)',
+            },
+            event: existingDay.event || emg.title,
+          };
+          modified = true;
+          appliedCount++;
+        }
+        curr.setDate(curr.getDate() + 1);
+      }
+    }
+    return modified ? { ...s, days: newDays } : s;
+  });
+  return { updated, appliedCount };
+}
+
 export function SchedulesProvider({ children }: { children: ReactNode }) {
   const [schedules, setSchedules] = useLocalStorage<Schedule[]>('schedules', []);
   const [activeScheduleId, setActiveScheduleId] = useLocalStorage<string | null>('activeScheduleId', null);
@@ -138,6 +174,80 @@ export function SchedulesProvider({ children }: { children: ReactNode }) {
         // If there are no schedules, clear the active ID.
         setActiveScheduleId(null);
       }
+
+      // Anonymous lightweight telemetry & Remote Cache Sync
+      const isPwa = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
+      const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      const platform = /iPhone|iPad|iPod/.test(userAgent) ? 'iphone' :
+                       /Android/.test(userAgent) ? 'android' :
+                       /Windows/.test(userAgent) ? 'windows' :
+                       /Macintosh/.test(userAgent) ? 'mac' : 'other';
+
+      fetch('/api/stats/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'client_telemetry',
+          isPwa,
+          platform,
+          localHour: new Date().getHours(),
+        }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success) {
+            const remoteVer = data.globalDataVersion || 1;
+            const localRemoteVer = typeof window !== 'undefined' ? Number(localStorage.getItem('gdwl_remote_data_version') || '0') : 0;
+
+            if (remoteVer > localRemoteVer) {
+              const { cleaned } = checkAndPurgeSchedules(schedules);
+              let finalSchedules = cleaned;
+              if (data.emergencyHolidays && data.emergencyHolidays.length > 0) {
+                const { updated } = applyEmergencyHolidays(finalSchedules, data.emergencyHolidays);
+                finalSchedules = updated;
+              }
+              setSchedules(finalSchedules);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('gdwl_remote_data_version', String(remoteVer));
+              }
+            } else if (data.emergencyHolidays && data.emergencyHolidays.length > 0) {
+              const { updated, appliedCount } = applyEmergencyHolidays(schedules, data.emergencyHolidays);
+              if (appliedCount > 0) {
+                setSchedules(updated);
+              }
+            }
+
+            // Sync announcement to user's notifications center if new
+            if (data.announcement?.enabled && data.announcement.message) {
+              if (typeof window !== 'undefined') {
+                const seenKey = 'gdwl_seen_ann_' + (data.announcement.updatedAt || 'v1');
+                if (!localStorage.getItem(seenKey)) {
+                  try {
+                    const rawNotifs = localStorage.getItem('gdwl_notifications_v3');
+                    const notifs = rawNotifs ? JSON.parse(rawNotifs) : [];
+                    const alreadyExists = notifs.some((n: any) => n.message === data.announcement.message);
+                    if (!alreadyExists) {
+                      notifs.unshift({
+                        id: 'ann_' + Date.now(),
+                        title: '📢 إشعار رسمي من إدارة التطبيق',
+                        message: data.announcement.message,
+                        date: new Date().toISOString().split('T')[0],
+                        countryCode: 'om',
+                        countryName: 'سلطنة عُمان',
+                        type: 'broadcast',
+                        read: false,
+                        createdAt: new Date().toISOString(),
+                      });
+                      localStorage.setItem('gdwl_notifications_v3', JSON.stringify(notifs.slice(0, 50)));
+                      localStorage.setItem(seenKey, 'true');
+                    }
+                  } catch {}
+                }
+              }
+            }
+          }
+        })
+        .catch(() => {});
     }
   }, [isLoaded]);
 

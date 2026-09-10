@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Trash2, Upload, Download, SlidersHorizontal, ZoomIn, ZoomOut, LayoutGrid, Smartphone, AlertTriangle, Bell, ChevronLeft, ArrowRight, CheckCheck, Sparkles, Megaphone, Globe, Check, RotateCw } from 'lucide-react';
+import { Plus, Trash2, Upload, Download, SlidersHorizontal, ZoomIn, ZoomOut, LayoutGrid, Smartphone, AlertTriangle, Bell, ChevronLeft, ArrowRight, CheckCheck, Sparkles, Megaphone, Globe, Check, RotateCw, MessageSquare, Send, Loader2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
@@ -181,6 +181,58 @@ export function ScheduleManager({
       setIsSyncingHolidays(false);
     }
   };
+
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [feedbackType, setFeedbackType] = useState<'suggestion' | 'bug' | 'feature' | 'other'>('suggestion');
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackContact, setFeedbackContact] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+
+  const handleSubmitFeedback = async () => {
+    if (!feedbackMessage.trim()) {
+      toast({ variant: "destructive", title: "تنبيه", description: "يرجى كتابة نص الرسالة أو الاقتراح أولاً." });
+      return;
+    }
+    setIsSubmittingFeedback(true);
+    try {
+      const isPwa = typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true);
+      const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      const platform = /iPhone|iPad|iPod/.test(userAgent) ? 'iPhone / iOS' :
+                       /Android/.test(userAgent) ? 'Android' :
+                       /Windows/.test(userAgent) ? 'Windows' :
+                       /Macintosh/.test(userAgent) ? 'Mac' : 'Web Browser';
+
+      const res = await fetch('/api/stats/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'submit_feedback',
+          type: feedbackType,
+          message: feedbackMessage,
+          contact: feedbackContact,
+          platform,
+          isPwa,
+        }),
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        toast({
+          title: "تم الإرسال بنجاح 💌",
+          description: "شكراً لك! وصلت رسالتك مباشرة إلى لوحة المطور وسيتم مراجعتها باهتمام.",
+        });
+        setFeedbackMessage('');
+        setFeedbackContact('');
+        setIsFeedbackOpen(false);
+      } else {
+        toast({ variant: "destructive", title: "خطأ بالإرسال", description: data?.error || "تعذر إرسال الملاحظة حالياً." });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "خطأ بالاتصال", description: "يرجى التحقق من اتصالك بالإنترنت." });
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
 
 
   const handleExport = () => {
@@ -470,6 +522,27 @@ export function ScheduleManager({
                     </Button>
                   </div>
 
+                  {/* User Feedback & Bug Report Card */}
+                  <div 
+                    onClick={() => setIsFeedbackOpen(true)}
+                    className="p-3 rounded-xl border border-blue-500/25 bg-blue-500/5 hover:bg-blue-500/10 transition-colors flex items-center justify-between gap-2 text-right cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="h-8 w-8 rounded-lg bg-blue-500/15 flex items-center justify-center text-blue-500 shrink-0">
+                        <MessageSquare className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-semibold text-xs sm:text-sm text-foreground">
+                          إرسال اقتراح أو بلاغ للمطور
+                        </h4>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          شاركنا أفكارك لتحسين التطبيق أو الإبلاغ عن أي ملاحظة
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronLeft className="h-4 w-4 text-muted-foreground group-hover:text-blue-500 transition-colors shrink-0" />
+                  </div>
+
                   <Separator className="my-4" />
 
                   <h3 className="font-semibold">إدارة الجداول</h3>
@@ -621,6 +694,110 @@ export function ScheduleManager({
                 />
             )}
         </DialogContent>
+    </Dialog>
+
+    {/* User Feedback Submission Dialog */}
+    <Dialog open={isFeedbackOpen} onOpenChange={setIsFeedbackOpen}>
+      <DialogContent className="max-w-md p-6" dir="rtl">
+        <DialogHeader className="text-right">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="h-8 w-8 rounded-lg bg-blue-500/15 flex items-center justify-center text-blue-500">
+              <MessageSquare className="h-4 w-4" />
+            </div>
+            <DialogTitle className="text-base font-bold">إرسال اقتراح أو بلاغ للمطور</DialogTitle>
+          </div>
+          <DialogDescription className="text-xs text-muted-foreground">
+            تصل رسالتك مباشرة للمطور في لوحة التحكم الإدارية لمراجعتها فوراً والعمل بها.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-2">
+          <div className="space-y-1.5 text-right">
+            <Label className="text-xs font-semibold">نوع الملاحظة:</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setFeedbackType('suggestion')}
+                className={`py-1.5 px-2 rounded-lg text-xs font-medium border transition-all ${
+                  feedbackType === 'suggestion'
+                    ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                    : 'bg-accent/40 border-border text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                💡 اقتراح تحسين
+              </button>
+              <button
+                type="button"
+                onClick={() => setFeedbackType('bug')}
+                className={`py-1.5 px-2 rounded-lg text-xs font-medium border transition-all ${
+                  feedbackType === 'bug'
+                    ? 'bg-red-500 text-white border-red-500 shadow-sm'
+                    : 'bg-accent/40 border-border text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                🐞 بلاغ عن خطأ
+              </button>
+              <button
+                type="button"
+                onClick={() => setFeedbackType('feature')}
+                className={`py-1.5 px-2 rounded-lg text-xs font-medium border transition-all ${
+                  feedbackType === 'feature'
+                    ? 'bg-purple-500 text-white border-purple-500 shadow-sm'
+                    : 'bg-accent/40 border-border text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                ✨ ميزة جديدة
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5 text-right">
+            <Label htmlFor="feedback-text" className="text-xs font-semibold">نص الرسالة أو الاقتراح:</Label>
+            <textarea
+              id="feedback-text"
+              rows={4}
+              value={feedbackMessage}
+              onChange={(e) => setFeedbackMessage(e.target.value)}
+              placeholder="اكتب ملاحظتك بالتفصيل هنا..."
+              className="w-full rounded-md border border-input bg-background p-2.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-right resize-none"
+            />
+          </div>
+
+          <div className="space-y-1.5 text-right">
+            <Label htmlFor="feedback-contact" className="text-xs font-semibold">طريقة تواصل (اختياري للرد عليك):</Label>
+            <Input
+              id="feedback-contact"
+              value={feedbackContact}
+              onChange={(e) => setFeedbackContact(e.target.value)}
+              placeholder="إيميلك أو حسابك (اختياري تماماً)"
+              className="text-xs text-right"
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsFeedbackOpen(false)}
+              disabled={isSubmittingFeedback}
+              className="text-xs"
+            >
+              إلغاء
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSubmitFeedback}
+              disabled={isSubmittingFeedback}
+              className="text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isSubmittingFeedback ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              إرسال للمطور الآن
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
     </Dialog>
     </>
   );
