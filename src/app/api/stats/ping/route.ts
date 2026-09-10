@@ -21,6 +21,9 @@ export interface UserFeedback {
   platform: string;
   isPwa: boolean;
   createdAt: string;
+  resolved?: boolean;
+  resolvedAt?: string;
+  adminNotes?: string;
 }
 
 // Shape of audit log entry
@@ -296,11 +299,73 @@ export async function POST(request: Request) {
       });
     }
 
-    // 5. Delete or Clear Feedback (Admin only)
+    // 5. Delete, Resolve, or Clear Feedback (Admin only)
     if (body.action === 'delete_feedback') {
       state.feedbacks = state.feedbacks.filter(f => f.id !== body.id);
       savePersistentState(state);
-      return NextResponse.json({ success: true, message: 'تم حذف الملاحظة بنجاح', data: state });
+      return NextResponse.json({ success: true, message: 'تم حذف الرسالة بنجاح', data: state });
+    }
+
+    if (body.action === 'toggle_resolve_feedback') {
+      state.feedbacks = state.feedbacks.map(f => {
+        if (f.id === body.id) {
+          const isNowResolved = !f.resolved;
+          return {
+            ...f,
+            resolved: isNowResolved,
+            resolvedAt: isNowResolved ? new Date().toISOString() : undefined,
+          };
+        }
+        return f;
+      });
+      savePersistentState(state);
+      return NextResponse.json({ success: true, message: 'تم تحديث حالة الرسالة بنجاح', data: state });
+    }
+
+    if (body.action === 'clear_all_feedback') {
+      state.feedbacks = [];
+      savePersistentState(state);
+      return NextResponse.json({ success: true, message: 'تم مسح كافة الرسائل الواردة بنجاح', data: state });
+    }
+
+    if (body.action === 'seed_sample_feedback') {
+      const now = Date.now();
+      const samples: UserFeedback[] = [
+        {
+          id: `fb_sample_1_${now}`,
+          type: 'bug',
+          message: 'تأكد من توافق إجازة العيد الوطني 18 و19 نوفمبر في التقويم مع الشفتات الليلية',
+          contact: 'user.oman@gmail.com',
+          platform: 'iPhone / iOS',
+          isPwa: true,
+          createdAt: new Date(now - 1000 * 60 * 30).toISOString(),
+          resolved: false,
+        },
+        {
+          id: `fb_sample_2_${now}`,
+          type: 'suggestion',
+          message: 'نقترح إضافة زر سريع لمشاركة جدول المناوبات بصيغة صورة عالية الدقة عبر تطبيق واتساب',
+          contact: '+96891234567',
+          platform: 'Android Mobile',
+          isPwa: true,
+          createdAt: new Date(now - 1000 * 60 * 120).toISOString(),
+          resolved: false,
+        },
+        {
+          id: `fb_sample_3_${now}`,
+          type: 'feature',
+          message: 'تطبيق رائع جداً ومتقن في احتساب إجازات سلطنة عُمان. نرجو الاستمرار في دعمه وتطويره!',
+          contact: 'developer.om@outlook.com',
+          platform: 'Windows PC',
+          isPwa: false,
+          createdAt: new Date(now - 1000 * 60 * 300).toISOString(),
+          resolved: true,
+          resolvedAt: new Date(now - 1000 * 60 * 60).toISOString(),
+        },
+      ];
+      state.feedbacks = [...samples, ...(state.feedbacks || [])].slice(0, 100);
+      savePersistentState(state);
+      return NextResponse.json({ success: true, message: 'تم إضافة رسائل تجريبية للاختبار بنجاح', data: state });
     }
 
     // 6. Master PIN update

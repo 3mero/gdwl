@@ -12,7 +12,9 @@ import {
   Server, Terminal, Megaphone, Wrench, RotateCcw, Sparkles, Send, Globe2,
   KeyRound, Eye, EyeOff, ShieldAlert, Database, BellRing, CloudLightning,
   CheckSquare, Square, Globe, CheckCircle2, MessageSquare, Trash2, Smartphone,
-  Laptop, Check, AlertTriangle, CalendarPlus, Clock, Crown, BarChart3, Radio
+  Laptop, Check, AlertTriangle, CalendarPlus, Clock, Crown, BarChart3, Radio,
+  Copy, Mail, CheckCheck, Undo2, Search, Download, PlusCircle, Filter, ExternalLink,
+  MessageCircle, Phone
 } from 'lucide-react';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
@@ -47,6 +49,9 @@ interface UserFeedback {
   platform: string;
   isPwa: boolean;
   createdAt: string;
+  resolved?: boolean;
+  resolvedAt?: string;
+  adminNotes?: string;
 }
 
 interface AuditLogEntry {
@@ -99,6 +104,10 @@ export default function SuperAdminDevPage() {
   });
   const [emergencyHolidays, setEmergencyHolidays] = useState<EmergencyHoliday[]>([]);
   const [feedbacks, setFeedbacks] = useState<UserFeedback[]>([]);
+  const [feedbackFilter, setFeedbackFilter] = useState<'all' | 'bug' | 'suggestion' | 'feature' | 'unresolved' | 'resolved'>('all');
+  const [feedbackSearch, setFeedbackSearch] = useState('');
+  const [isSeedingFeedback, setIsSeedingFeedback] = useState(false);
+  const [isClearingFeedback, setIsClearingFeedback] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [announcement, setAnnouncement] = useState({ enabled: false, message: '', type: 'info' });
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -344,11 +353,148 @@ export default function SuperAdminDevPage() {
       const data = await res.json();
       if (data.success) {
         setFeedbacks(data.data.feedbacks);
-        toast({ title: "تم حذف الرسالة بنجاح" });
+        toast({ title: "تم حذف الرسالة بنجاح 🗑️" });
       }
     } catch {
       toast({ variant: "destructive", title: "فشل الحذف" });
     }
+  };
+
+  // Toggle Resolve Feedback (Completed / In Progress)
+  const handleToggleResolveFeedback = async (id: string) => {
+    try {
+      const res = await fetch('/api/stats/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle_resolve_feedback', id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeedbacks(data.data.feedbacks);
+        const item = data.data.feedbacks.find((f: UserFeedback) => f.id === id);
+        toast({
+          title: item?.resolved ? "تم تحديد الرسالة كمُنجزة ومحلولة ✅" : "تمت إعادة فتح الرسالة قيد المتابعة ⏳",
+        });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "فشل تحديث حالة الرسالة" });
+    }
+  };
+
+  // Clear All Feedbacks with Safety Check
+  const handleClearAllFeedback = async () => {
+    if (!window.confirm("هل أنت متأكد من مسح جميع الرسائل الواردة؟ لا يمكن التراجع عن هذا الإجراء.")) return;
+    setIsClearingFeedback(true);
+    try {
+      const res = await fetch('/api/stats/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clear_all_feedback' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeedbacks([]);
+        toast({ title: "تم مسح كافة الرسائل الواردة بنجاح 🧹" });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "فشل مسح الرسائل" });
+    } finally {
+      setIsClearingFeedback(false);
+    }
+  };
+
+  // Seed Sample Feedbacks for Testing
+  const handleSeedSampleFeedback = async () => {
+    setIsSeedingFeedback(true);
+    try {
+      const res = await fetch('/api/stats/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'seed_sample_feedback' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeedbacks(data.data.feedbacks);
+        toast({
+          title: "تم إضافة رسائل تجريبية للاختبار 🧪",
+          description: "تم ملء الصندوق بـ 3 رسائل متنوعة لتجربة أزرار الرد، التحويل لبث عام، والنسخ!",
+        });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "فشل إضافة الرسائل التجريبية" });
+    } finally {
+      setIsSeedingFeedback(false);
+    }
+  };
+
+  // Copy Feedback Text with Metadata
+  const handleCopyFeedback = (f: UserFeedback) => {
+    const text = `[رسالة مستخدم تطبيق جدول]\nالنوع: ${f.type === 'bug' ? 'بلاغ خطأ' : f.type === 'feature' ? 'ميزة جديدة' : 'اقتراح'}\nالمنصة: ${f.platform} (${f.isPwa ? 'تطبيق PWA مثبت' : 'متصفح ويب'})\nالتواصل: ${f.contact || 'لم يذكر'}\nالتاريخ: ${new Date(f.createdAt).toLocaleString('ar-OM')}\n\nنص الرسالة:\n${f.message}`;
+    navigator.clipboard.writeText(text);
+    toast({ title: "تم نسخ تفاصيل الرسالة للحافظة 📋" });
+  };
+
+  // Convert Feedback to Central Announcement Broadcast
+  const handleConvertToBroadcast = (f: UserFeedback) => {
+    const defaultBroadcast = `توضيح بخصوص استفساركم: ${f.message.length > 70 ? f.message.substring(0, 70) + '...' : f.message}`;
+    setBroadcastText(defaultBroadcast);
+    const broadcastCard = document.getElementById('central-broadcast-section');
+    if (broadcastCard) {
+      broadcastCard.scrollIntoView({ behavior: 'smooth' });
+    }
+    toast({
+      title: "تم نقل الرسالة لحقل البث العام 📢",
+      description: "يمكنك الآن تعديل التوضيح أو نشره كإشعار عام يظهر لجميع المستخدمين.",
+    });
+  };
+
+  // Export Feedback to JSON
+  const handleExportFeedbackJson = () => {
+    if (feedbacks.length === 0) {
+      toast({ variant: "destructive", title: "لا توجد رسائل لتصديرها" });
+      return;
+    }
+    const dataStr = JSON.stringify(feedbacks, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gdwl_user_feedbacks_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "تم تصدير ملف الرسائل بنجاح 📥" });
+  };
+
+  // Direct Reply via Email, WhatsApp, or Phone
+  const handleDirectReply = (f: UserFeedback) => {
+    if (!f.contact) {
+      toast({
+        title: "المستخدم لم يرفق وسيلة تواصل",
+        description: "يمكنك استخدام زر 'تحويل لبث عام' لنشر توضيح عام لجميع مستخدمي التطبيق.",
+      });
+      return;
+    }
+
+    if (f.contact.includes('@')) {
+      const subject = encodeURIComponent('رد من مطور تطبيق جدول (GDWL)');
+      const body = encodeURIComponent(
+        `مرحباً بك،\n\nنشكرك على تواصلك واهتمامك بتطبيق جدول (GDWL).\nبخصوص ملاحظتك الكريمة:\n"${f.message}"\n\nنود إفادتك بأنه تم فحص طلبك وسنعمل على توفيره بأفضل صورة.\n\n---\nمع تحيات مطور التطبيق`
+      );
+      window.open(`mailto:${f.contact.trim()}?subject=${subject}&body=${body}`, '_blank');
+      return;
+    }
+
+    const cleanPhone = f.contact.replace(/[^\d+]/g, '');
+    if (cleanPhone.length >= 8) {
+      const waPhone = cleanPhone.startsWith('+') ? cleanPhone.replace('+', '') :
+                      cleanPhone.startsWith('00') ? cleanPhone.substring(2) :
+                      cleanPhone.startsWith('9') && cleanPhone.length === 8 ? `968${cleanPhone}` : cleanPhone;
+      const text = encodeURIComponent(`مرحباً بك، بخصوص رسالتك الكريمة في تطبيق جدول:\n"${f.message.substring(0, 60)}..."`);
+      window.open(`https://wa.me/${waPhone}?text=${text}`, '_blank');
+      return;
+    }
+
+    window.open(`tel:${cleanPhone}`, '_blank');
   };
 
   // Change Master PIN
@@ -489,6 +635,31 @@ export default function SuperAdminDevPage() {
 
   const totalAppUsers = (stats.pwaUsers || 0) + (stats.webUsers || 0);
   const pwaPercent = totalAppUsers > 0 ? Math.round(((stats.pwaUsers || 0) / totalAppUsers) * 100) : 65;
+
+  // Feedback Hub Computed Metrics & Filtered List
+  const totalFeedbacks = feedbacks.length;
+  const bugCount = feedbacks.filter(f => f.type === 'bug').length;
+  const suggestionCount = feedbacks.filter(f => f.type === 'suggestion').length;
+  const featureCount = feedbacks.filter(f => f.type === 'feature').length;
+  const pendingCount = feedbacks.filter(f => !f.resolved).length;
+  const resolvedCount = feedbacks.filter(f => f.resolved).length;
+
+  const filteredFeedbacks = feedbacks.filter((f) => {
+    if (feedbackFilter === 'bug' && f.type !== 'bug') return false;
+    if (feedbackFilter === 'suggestion' && f.type !== 'suggestion') return false;
+    if (feedbackFilter === 'feature' && f.type !== 'feature') return false;
+    if (feedbackFilter === 'unresolved' && f.resolved) return false;
+    if (feedbackFilter === 'resolved' && !f.resolved) return false;
+
+    if (feedbackSearch.trim()) {
+      const q = feedbackSearch.toLowerCase();
+      const matchMsg = f.message?.toLowerCase().includes(q);
+      const matchContact = f.contact?.toLowerCase().includes(q);
+      const matchPlatform = f.platform?.toLowerCase().includes(q);
+      if (!matchMsg && !matchContact && !matchPlatform) return false;
+    }
+    return true;
+  });
 
   if (!mounted) {
     return (
@@ -928,110 +1099,385 @@ export default function SuperAdminDevPage() {
               </div>
 
               {/* PILLAR 3: BROADCAST & FEEDBACK HUB */}
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <MessageSquare className="h-5 w-5 text-blue-500" />
-                    <h2 className="text-lg font-bold">3️⃣ التنبيهات المركزية وصندوق الملاحظات والبلاغات</h2>
+                    <h2 className="text-lg font-bold">3️⃣ التنبيهات المركزية وإدارة رسائل وبلاغات المستخدمين</h2>
                   </div>
                   <span className="text-xs bg-blue-500/15 text-blue-500 px-2.5 py-0.5 rounded-full font-bold">
-                    وارد مباشر
+                    وارد مباشر وتحكم شامل
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* Broadcast Card */}
-                  <Card>
-                    <CardHeader>
-                      <div className="flex items-center gap-2">
-                        <Megaphone className="h-5 w-5 text-primary" />
-                        <CardTitle className="text-base font-bold">بث التنبيهات المركزية لجميع المستخدمين</CardTitle>
+                {/* 1. Broadcast Card */}
+                <Card id="central-broadcast-section" className="border-border">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Megaphone className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-base font-bold">بث التنبيهات المركزية لجميع المستخدمين (Broadcast Announcement)</CardTitle>
+                    </div>
+                    <CardDescription className="text-xs">
+                      نشر إشعار رسمي يظهر في شاشة التنبيهات داخل إعدادات المستخدمين مع شارة حمراء فورية.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold">نص الإعلان الرسمي أو الرد العام:</Label>
+                      <Input
+                        value={broadcastText}
+                        onChange={(e) => setBroadcastText(e.target.value)}
+                        placeholder="مثال: تنبيه رسمي: تم تحديث إجازات سلطنة عُمان لعام 2026 أو الرد على استفسار عام..."
+                        className="text-xs"
+                      />
+                    </div>
+                    {announcement.enabled && announcement.message && (
+                      <div className="p-3 bg-primary/10 border border-primary/25 rounded-xl text-xs flex items-center justify-between">
+                        <span className="font-semibold text-primary">المُذاع حالياً: "{announcement.message}"</span>
+                        <span className="text-emerald-500 text-[10px] font-mono">نشط 🟢</span>
                       </div>
-                      <CardDescription className="text-xs">
-                        نشر إشعار رسمي يظهر في شاشة التنبيهات داخل إعدادات المستخدمين مع شارة حمراء فورية.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">نص الإعلان الرسمي:</Label>
+                    )}
+                  </CardContent>
+                  <CardFooter className="flex gap-2 justify-end border-t pt-3">
+                    <Button size="sm" variant="outline" onClick={() => handleUpdateAnnouncement(false)} className="text-xs">
+                      تعطيل
+                    </Button>
+                    <Button size="sm" onClick={() => handleUpdateAnnouncement(true)} className="text-xs gap-1.5 bg-primary font-bold text-primary-foreground">
+                      <Send className="h-3.5 w-3.5" /> نشر الإعلان للجميع
+                    </Button>
+                  </CardFooter>
+                </Card>
+
+                {/* 2. Full-Width Advanced User Feedback Command Center */}
+                <Card className="border-blue-500/30 bg-gradient-to-b from-blue-500/5 to-transparent shadow-lg">
+                  <CardHeader className="pb-4 border-b">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-9 w-9 rounded-xl bg-blue-500/20 text-blue-500 flex items-center justify-center border border-blue-500/30 shrink-0">
+                            <MessageSquare className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-lg font-bold text-foreground">
+                              صندوق استقبال وإدارة رسائل المستخدمين ({totalFeedbacks})
+                            </CardTitle>
+                            <CardDescription className="text-xs pt-0.5">
+                              استقبال فوري للاقتراحات، بلاغات الأخطاء، وطلبات الإضافات مع أدوات الرد والتحويل والحفظ.
+                            </CardDescription>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Global Toolbar Buttons */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={fetchSystemState}
+                          disabled={isLoading}
+                          className="h-8 text-xs gap-1.5 border-border hover:bg-accent"
+                          title="تحديث قائمة الرسائل من الخادم"
+                        >
+                          <RefreshCw className={isLoading ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
+                          <span>تحديث فوري</span>
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleExportFeedbackJson}
+                          disabled={feedbacks.length === 0}
+                          className="h-8 text-xs gap-1.5 border-border hover:bg-accent"
+                          title="تصدير كملف JSON للنسخ الاحتياطي"
+                        >
+                          <Download className="h-3.5 w-3.5 text-blue-400" />
+                          <span>تصدير JSON</span>
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleSeedSampleFeedback}
+                          disabled={isSeedingFeedback}
+                          className="h-8 text-xs gap-1.5 border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                          title="توليد 3 رسائل تجريبية واقعية لاختبار الأدوات"
+                        >
+                          {isSeedingFeedback ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                          <span>رسائل تجريبية 🧪</span>
+                        </Button>
+
+                        {feedbacks.length > 0 && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleClearAllFeedback}
+                            disabled={isClearingFeedback}
+                            className="h-8 text-xs gap-1.5 text-destructive hover:bg-destructive/10"
+                            title="مسح كافة الرسائل من السجل"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>مسح الكل</span>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Filter Pills & Search Bar */}
+                    <div className="pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      {/* Search input */}
+                      <div className="relative w-full sm:w-72">
+                        <Search className="absolute right-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
-                          value={broadcastText}
-                          onChange={(e) => setBroadcastText(e.target.value)}
-                          placeholder="مثال: تنبيه رسمي: تم تحديث إجازات سلطنة عُمان لعام 2026..."
-                          className="text-xs"
+                          value={feedbackSearch}
+                          onChange={(e) => setFeedbackSearch(e.target.value)}
+                          placeholder="بحث بالنص أو الرقم أو البريد..."
+                          className="h-8 text-xs pr-8 pl-3"
                         />
                       </div>
-                      {announcement.enabled && announcement.message && (
-                        <div className="p-3 bg-primary/10 border border-primary/25 rounded-xl text-xs flex items-center justify-between">
-                          <span className="font-semibold text-primary">المُذاع حالياً: "{announcement.message}"</span>
-                          <span className="text-emerald-500 text-[10px] font-mono">نشط 🟢</span>
-                        </div>
-                      )}
-                    </CardContent>
-                    <CardFooter className="flex gap-2 justify-end border-t pt-3">
-                      <Button size="sm" variant="outline" onClick={() => handleUpdateAnnouncement(false)} className="text-xs">
-                        تعطيل
-                      </Button>
-                      <Button size="sm" onClick={() => handleUpdateAnnouncement(true)} className="text-xs gap-1.5 bg-primary">
-                        <Send className="h-3.5 w-3.5" /> نشر الإعلان للجميع
-                      </Button>
-                    </CardFooter>
-                  </Card>
 
-                  {/* Feedback Inbox Card */}
-                  <Card className="flex flex-col">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <MessageSquare className="h-5 w-5 text-blue-500" />
-                          <CardTitle className="text-base font-bold">صندوق استقبال الملاحظات والبلاغات ({feedbacks.length})</CardTitle>
-                        </div>
+                      {/* Filter Pills */}
+                      <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                        <Button
+                          size="sm"
+                          variant={feedbackFilter === 'all' ? 'default' : 'outline'}
+                          onClick={() => setFeedbackFilter('all')}
+                          className="h-8 text-xs px-2.5"
+                        >
+                          الكل ({totalFeedbacks})
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={feedbackFilter === 'bug' ? 'default' : 'outline'}
+                          onClick={() => setFeedbackFilter('bug')}
+                          className={`h-8 text-xs px-2.5 ${feedbackFilter === 'bug' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}`}
+                        >
+                          🐞 أخطاء ({bugCount})
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={feedbackFilter === 'suggestion' ? 'default' : 'outline'}
+                          onClick={() => setFeedbackFilter('suggestion')}
+                          className={`h-8 text-xs px-2.5 ${feedbackFilter === 'suggestion' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
+                        >
+                          💡 اقتراحات ({suggestionCount})
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={feedbackFilter === 'feature' ? 'default' : 'outline'}
+                          onClick={() => setFeedbackFilter('feature')}
+                          className={`h-8 text-xs px-2.5 ${feedbackFilter === 'feature' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
+                        >
+                          ✨ ميزات ({featureCount})
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={feedbackFilter === 'unresolved' ? 'default' : 'outline'}
+                          onClick={() => setFeedbackFilter('unresolved')}
+                          className={`h-8 text-xs px-2.5 ${feedbackFilter === 'unresolved' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}`}
+                        >
+                          ⏳ قيد المتابعة ({pendingCount})
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={feedbackFilter === 'resolved' ? 'default' : 'outline'}
+                          onClick={() => setFeedbackFilter('resolved')}
+                          className={`h-8 text-xs px-2.5 ${feedbackFilter === 'resolved' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                        >
+                          ✅ منجز ({resolvedCount})
+                        </Button>
                       </div>
-                      <CardDescription className="text-xs">
-                        الرسائل والاقتراحات المرسلة من المستخدمين من داخل التطبيق.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-1 overflow-y-auto max-h-72 space-y-2.5 pt-1">
-                      {feedbacks.length === 0 ? (
-                        <div className="p-6 text-center text-xs text-muted-foreground">
-                          صندوق الوارد فارغ. لم يتم إرسال بلاغات أو اقتراحات جديدة بعد.
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="pt-4 space-y-3">
+                    {filteredFeedbacks.length === 0 ? (
+                      <div className="py-12 px-4 text-center space-y-3 bg-accent/10 rounded-2xl border border-dashed">
+                        <div className="mx-auto h-12 w-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20">
+                          <MessageSquare className="h-6 w-6" />
                         </div>
-                      ) : (
-                        feedbacks.map((f) => (
-                          <div key={f.id} className="p-3 rounded-xl border bg-accent/20 text-xs space-y-1.5 text-right">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  f.type === 'bug' ? 'bg-red-500/20 text-red-500' :
-                                  f.type === 'feature' ? 'bg-purple-500/20 text-purple-500' : 'bg-blue-500/20 text-blue-500'
-                                }`}>
-                                  {f.type === 'bug' ? '🐞 بلاغ خطأ' : f.type === 'feature' ? '✨ ميزة جديدة' : '💡 اقتراح'}
+                        <p className="font-bold text-sm text-foreground">
+                          {feedbackSearch ? "لا توجد رسائل مطابقة لبحثك" : "صندوق الوارد فارغ حالياً"}
+                        </p>
+                        <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
+                          {feedbackSearch
+                            ? "جرب البحث بكلمات أخرى أو اختر فلتر 'الكل'."
+                            : "يمكنك الضغط على زر 'رسائل تجريبية 🧪' بالأعلى لتوليد رسائل اختبار فورية وتجربة كافة الأدوات والمميزات."}
+                        </p>
+                        {!feedbackSearch && (
+                          <Button
+                            size="sm"
+                            onClick={handleSeedSampleFeedback}
+                            className="text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            توليد رسائل تجريبية الآن
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {filteredFeedbacks.map((f) => (
+                          <div
+                            key={f.id}
+                            className={`p-4 rounded-2xl border transition-all duration-200 space-y-3 ${
+                              f.resolved
+                                ? "bg-muted/30 border-emerald-500/30 opacity-90"
+                                : "bg-card border-border/80 shadow-sm hover:border-primary/40"
+                            }`}
+                          >
+                            {/* Header row of each feedback card */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {/* Type Badge */}
+                                <span
+                                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                                    f.type === 'bug'
+                                      ? 'bg-red-500/15 text-red-500 border border-red-500/30'
+                                      : f.type === 'feature'
+                                      ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                                      : 'bg-blue-500/15 text-blue-500 border border-blue-500/30'
+                                  }`}
+                                >
+                                  {f.type === 'bug' ? '🐞 بلاغ خطأ' : f.type === 'feature' ? '✨ طلب ميزة' : '💡 اقتراح'}
                                 </span>
-                                <span className="text-[10px] text-muted-foreground">{f.platform}</span>
-                                {f.isPwa && <span className="text-[10px] text-emerald-500 font-bold">PWA</span>}
+
+                                {/* Status Badge */}
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    f.resolved
+                                      ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
+                                      : 'bg-amber-500/15 text-amber-500 border border-amber-500/30'
+                                  }`}
+                                >
+                                  {f.resolved ? '✅ تم الإنجاز' : '⏳ قيد المتابعة'}
+                                </span>
+
+                                {/* Platform and PWA */}
+                                <span className="text-[11px] text-muted-foreground bg-accent/40 px-2 py-0.5 rounded-md">
+                                  {f.platform}
+                                </span>
+                                {f.isPwa && (
+                                  <span className="text-[10px] text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded font-bold">
+                                    تطبيق مثبت PWA
+                                  </span>
+                                )}
                               </div>
+
+                              <span className="text-[11px] text-muted-foreground font-mono">
+                                📅 {new Date(f.createdAt).toLocaleString('ar-OM', { dateStyle: 'medium', timeStyle: 'short' })}
+                              </span>
+                            </div>
+
+                            {/* Message Body */}
+                            <div className="space-y-1 text-right">
+                              <p className="text-sm font-semibold text-foreground leading-relaxed whitespace-pre-wrap select-text">
+                                {f.message}
+                              </p>
+                              {f.contact && (
+                                <div className="inline-flex items-center gap-1.5 text-xs text-primary font-medium bg-primary/10 px-2.5 py-1 rounded-lg mt-1 border border-primary/20">
+                                  {f.contact.includes('@') ? <Mail className="h-3.5 w-3.5" /> : <Phone className="h-3.5 w-3.5" />}
+                                  <span>بيانات التواصل: <span className="font-mono font-bold select-all">{f.contact}</span></span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Action Buttons Toolbar for this Feedback Item */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t text-xs">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {/* Reply via Email / WhatsApp */}
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => handleDirectReply(f)}
+                                  className="h-7 text-xs gap-1.5 font-bold"
+                                  title="الرد المباشر عبر البريد أو واتساب"
+                                >
+                                  {f.contact?.includes('@') ? (
+                                    <>
+                                      <Mail className="h-3 w-3" />
+                                      <span>رد بالبريد</span>
+                                    </>
+                                  ) : f.contact ? (
+                                    <>
+                                      <MessageCircle className="h-3 w-3" />
+                                      <span>رد واتساب</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ExternalLink className="h-3 w-3" />
+                                      <span>رد وتواصل</span>
+                                    </>
+                                  )}
+                                </Button>
+
+                                {/* Copy Text Button */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleCopyFeedback(f)}
+                                  className="h-7 text-xs gap-1.5 border-border hover:bg-accent"
+                                  title="نسخ نص الرسالة للحافظة"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                  <span>نسخ النص</span>
+                                </Button>
+
+                                {/* Convert to Broadcast Button */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleConvertToBroadcast(f)}
+                                  className="h-7 text-xs gap-1.5 border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
+                                  title="تحويل لرد عام ونشره لجميع المستخدمين"
+                                >
+                                  <Megaphone className="h-3 w-3" />
+                                  <span>تحويل لبث عام</span>
+                                </Button>
+
+                                {/* Toggle Resolved Button */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleToggleResolveFeedback(f.id)}
+                                  className={`h-7 text-xs gap-1.5 font-bold ${
+                                    f.resolved
+                                      ? 'border-amber-500/30 text-amber-500 hover:bg-amber-500/10'
+                                      : 'border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10'
+                                  }`}
+                                  title={f.resolved ? "إعادة فتح كقيد المتابعة" : "تحديد كمكتمل ومحلول"}
+                                >
+                                  {f.resolved ? (
+                                    <>
+                                      <Undo2 className="h-3 w-3" />
+                                      <span>إعادة فتح</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCheck className="h-3 w-3" />
+                                      <span>تحديد كمُنجز ✅</span>
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+
+                              {/* Delete Button */}
                               <Button
-                                size="icon"
+                                size="sm"
                                 variant="ghost"
-                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
                                 onClick={() => handleDeleteFeedback(f.id)}
+                                className="h-7 text-xs gap-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                title="حذف هذه الرسالة نهائياً"
                               >
                                 <Trash2 className="h-3 w-3" />
+                                <span>حذف</span>
                               </Button>
                             </div>
-                            <p className="font-semibold text-foreground text-xs">{f.message}</p>
-                            {f.contact && (
-                              <p className="text-[11px] text-primary">تواصل: {f.contact}</p>
-                            )}
-                            <p className="text-[10px] text-muted-foreground font-mono">
-                              {new Date(f.createdAt).toLocaleString('ar-OM')}
-                            </p>
                           </div>
-                        ))
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
 
               {/* PILLAR 4: OMAN AI STUDIO & DECREE 88/2022 CHECK */}
