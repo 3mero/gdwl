@@ -110,12 +110,17 @@ export function GoogleSyncButton() {
 
   // Auto-sync on page entry so user never forgets to upload!
   const hasAutoSyncedOnMount = React.useRef(false);
+  const schedulesRef = React.useRef(schedules);
+  const viewSettingsRef = React.useRef(viewSettings);
+  schedulesRef.current = schedules;
+  viewSettingsRef.current = viewSettings;
+
   React.useEffect(() => {
-    if (isDriveConnected && user && schedules.length > 0 && !hasAutoSyncedOnMount.current) {
+    if (isDriveConnected && user && schedulesRef.current.length > 0 && !hasAutoSyncedOnMount.current) {
       hasAutoSyncedOnMount.current = true;
-      syncNow({ schedules, viewSettings }).catch(() => {});
+      syncNow({ schedules: schedulesRef.current, viewSettings: viewSettingsRef.current }).catch(() => {});
     }
-  }, [isDriveConnected, user, schedules, viewSettings, syncNow]);
+  }, [isDriveConnected, user, syncNow]);
 
   return (
     <Popover>

@@ -226,6 +226,13 @@ export function GoogleSyncProvider({ children }: { children: ReactNode }) {
   }, [setAccessToken, setTokenExpiresAt, setUser, setLastSynced]);
 
   const syncNow = useCallback(async (exportData: FullExport): Promise<boolean> => {
+    // Check connectivity first
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setStatus('offline');
+      setError('لا يتوفر اتصال بالإنترنت. ستتم المزامنة تلقائياً عند العودة للاتصال.');
+      return false;
+    }
+
     const token = await getValidAccessToken();
     if (!token) {
       if (!user) setStatus('unauthenticated');
@@ -272,6 +279,13 @@ export function GoogleSyncProvider({ children }: { children: ReactNode }) {
   }, [getValidAccessToken, user, setLastSynced, pingAnalyticsCounter, requestGoogleLogin, setAccessToken]);
 
   const restoreFromCloud = useCallback(async (): Promise<FullExport | null> => {
+    // Check connectivity first
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setStatus('offline');
+      setError('لا يتوفر اتصال بالإنترنت. يرجى المحاولة مرة أخرى عند الاتصال بالشبكة.');
+      return null;
+    }
+
     const token = await getValidAccessToken();
     if (!token) {
       if (!user) setStatus('unauthenticated');
@@ -327,6 +341,27 @@ export function GoogleSyncProvider({ children }: { children: ReactNode }) {
       refreshLastSyncTime(accessToken);
     }
   }, [accessToken, refreshLastSyncTime]);
+
+  // Listen for online/offline events to update sync status
+  useEffect(() => {
+    const handleOnline = () => {
+      if (status === 'offline') {
+        setStatus(user ? 'synced' : 'unauthenticated');
+        setError(null);
+      }
+    };
+    const handleOffline = () => {
+      if (user) {
+        setStatus('offline');
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [status, user]);
 
   const value = {
     user,

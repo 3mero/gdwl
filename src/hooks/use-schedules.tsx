@@ -435,9 +435,17 @@ export function SchedulesProvider({ children }: { children: ReactNode }) {
   }, [activeScheduleId, updateSchedule]);
 
   const deleteAllData = useCallback(() => {
-    // This is the most robust way to ensure everything is cleared.
     if (typeof window !== 'undefined') {
-        localStorage.clear();
+        // Only clear app-specific keys, preserve Google auth session
+        const keysToDelete = [
+          'schedules', 'activeScheduleId', 'viewSettings',
+          'gdwl_last_synced', 'gdwl_auto_sync',
+          'gdwl_notifications_v3',
+          'gdwl_oman_holidays_sync_version',
+          'gdwl_remote_data_version',
+          'gdwl_session_id',
+        ];
+        keysToDelete.forEach(k => localStorage.removeItem(k));
         window.location.reload();
     }
   }, []);
